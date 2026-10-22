@@ -1,0 +1,41 @@
+/* Estilo de impressão do material de estudo (A4). */
+@page { size: A4; }
+:root { --texto: #1b1f24; --suave: #555d66; --borda: #d0d7de; --fundo-codigo: #f6f8fa; --destaque: #1d4ed8; }
+html { font-family: Inter, "DejaVu Sans", sans-serif; font-size: 10.5pt; color: var(--texto); line-height: 1.5; }
+body { max-width: none; margin: 0; padding: 0; }
+header#title-block-header { page-break-after: always; padding-top: 30mm; }
+header#title-block-header .title { font-size: 26pt; line-height: 1.2; margin-bottom: 8mm; }
+h1 { font-size: 19pt; page-break-before: always; border-bottom: 2px solid var(--texto); padding-bottom: 2mm; margin-top: 0; }
+h2 { font-size: 14pt; margin-top: 7mm; page-break-after: avoid; }
+h3 { font-size: 12pt; margin-top: 5mm; page-break-after: avoid; }
+h4 { font-size: 10.5pt; margin-top: 4mm; page-break-after: avoid; }
+p, li { orphans: 3; widows: 3; }
+a { color: var(--destaque); text-decoration: none; }
+nav#TOC { page-break-after: always; }
+nav#TOC > ul { padding-left: 0; }
+nav#TOC li { list-style: none; margin: 1mm 0; }
+nav#TOC ul ul { padding-left: 6mm; font-size: 9.5pt; }
+nav#TOC::before { content: "Sumário"; display: block; font-size: 19pt; font-weight: 700; margin-bottom: 4mm; }
+code { font-family: "DejaVu Sans Mono", monospace; font-size: 8.6pt; background: var(--fundo-codigo); padding: 0 2px; border-radius: 3px; overflow-wrap: anywhere; }
+pre { font-family: "DejaVu Sans Mono", monospace; font-size: 7.6pt; line-height: 1.38; background: var(--fundo-codigo);
+      border: 1px solid var(--borda); border-radius: 4px; padding: 2mm 2mm 2mm 0; white-space: pre-wrap; overflow-wrap: anywhere;
+      page-break-inside: auto; }
+pre code { background: none; padding: 0; font-size: inherit; }
+div.sourceCode { margin: 1mm 0 3mm; background: none; }
+pre.numberSource { margin-left: 0; border-left: 1px solid var(--borda); padding-left: 0; }
+pre.numberSource code > span { position: relative; left: 0; padding-left: 11mm; display: inline-block; width: 100%; box-sizing: border-box; text-indent: 0; line-height: 1.38; min-height: 1.38em; vertical-align: top; }
+pre.numberSource code > span > a:first-child::before { color: #8c959f; width: 9mm; left: 0; position: absolute; text-align: right; padding-right: 2mm; border-right: none; margin-left: 0; }
+.trecho-titulo { font-family: "DejaVu Sans Mono", monospace; font-size: 7.8pt; color: var(--suave); margin: 3mm 0 0; page-break-after: avoid; }
+table { border-collapse: collapse; width: 100%; font-size: 9pt; margin: 2mm 0 4mm; page-break-inside: auto; }
+th, td { border: 1px solid var(--borda); padding: 1.2mm 1.8mm; vertical-align: top; text-align: left; }
+th { background: #eef1f4; }
+tr { page-break-inside: avoid; }
+blockquote { border-left: 3px solid var(--destaque); margin: 3mm 0; padding: 1mm 4mm; color: #24292f; background: #f3f6fc; }
+.diagrama { text-align: center; margin: 3mm 0 5mm; page-break-inside: avoid; }
+.diagrama svg { max-width: 100%; height: auto; max-height: 230mm; }
+.pergunta { page-break-inside: avoid; }
+hr { border: none; border-top: 1px solid var(--borda); margin: 5mm 0; }
+.gabarito h3 { color: #0f5132; }
+
+pre:not(.numberSource) { padding-left: 2.5mm; }
+pre:not(.numberSource) code.sourceCode > span { display: inline-block; width: 100%; box-sizing: border-box; padding-left: 2em; text-indent: -2em; vertical-align: top; }

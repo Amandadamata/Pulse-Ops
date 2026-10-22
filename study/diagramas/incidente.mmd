@@ -1,0 +1,14 @@
+stateDiagram-v2
+    [*] --> SemDados: monitor criado ou retomado
+    SemDados --> Saudavel: sucesso
+    SemDados --> Degradado: lento ou falha abaixo do limiar
+    Saudavel --> Degradado: lento ou 1ª falha
+    Degradado --> Saudavel: sucesso rápido
+    Degradado --> Indisponivel: falhas seguidas = failure_threshold (abre incidente)
+    Indisponivel --> Indisponivel: mais falhas (mesmo incidente) ou sucesso abaixo do limiar de recuperação
+    Indisponivel --> Saudavel: sucessos seguidos = recovery_threshold (resolve)
+    Indisponivel --> Degradado: recuperou com resposta lenta (resolve)
+    Saudavel --> Pausado: pausar ou arquivar
+    Degradado --> Pausado: pausar ou arquivar
+    Indisponivel --> Pausado: pausar ou arquivar (incidente "closed")
+    Pausado --> SemDados: retomar

@@ -1,0 +1,15 @@
+sequenceDiagram
+    participant L as Laço de checks (runner.py)
+    participant P as processing.py
+    participant B as PostgreSQL
+    participant C as HttpChecker
+    participant A as Alvo HTTP
+    L->>P: claim_due_runs(limite = vagas livres)
+    P->>B: transação 1: SELECT ... FOR UPDATE SKIP LOCKED<br/>INSERT check 'running' e avança next_run_at
+    B-->>L: execuções reservadas (ClaimedRun)
+    L->>C: check(target) em uma tarefa por execução
+    C->>A: GET ou HEAD, sem transação aberta, no IP validado
+    A-->>C: status e tempo, ou erro
+    C-->>L: CheckObservation (resultado + explicação)
+    L->>P: record_result(run, observation)
+    P->>B: transação 2: trava monitor, grava check,<br/>HealthTracker, incidente, eventos, outbox

@@ -1,0 +1,14 @@
+sequenceDiagram
+    participant P as record_result (transação 2)
+    participant B as PostgreSQL
+    participant E as Laço de entregas (runner.py)
+    participant W as WebhookNotifier
+    participant R as Receptor
+    P->>B: INSERT alert_events (event_key único)<br/>INSERT deliveries (uma por destino ativo)
+    loop a cada tick
+        E->>B: claim_due_deliveries: status pending/sending e next_attempt_at vencido<br/>(marca 'sending' e empurra next_attempt_at: reserva com prazo)
+        E->>W: send(url, event_id, payload)
+        W->>R: POST com X-PulseOps-Event-Id
+        R-->>W: 2xx, 4xx, 5xx ou timeout
+        E->>B: INSERT delivery_attempts e marca delivered, pending (com backoff) ou failed
+    end

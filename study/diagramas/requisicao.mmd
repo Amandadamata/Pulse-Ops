@@ -1,0 +1,18 @@
+sequenceDiagram
+    participant N as Navegador
+    participant M as Middleware (app.py)
+    participant D as Dependências (deps.py)
+    participant R as Rota (api.py)
+    participant S as Serviço (services/monitors.py)
+    participant B as PostgreSQL
+    N->>M: POST /api/v1/monitors (cookie + X-CSRF-Token + JSON)
+    M->>D: abre sessão do banco, carrega a sessão do operador
+    D->>B: SELECT operator_sessions ... WHERE token_hash = ?
+    D-->>R: AuthContext (CSRF conferido)
+    R->>R: Pydantic valida o JSON (MonitorIn)
+    R->>S: create_monitor(config, policy, ...)
+    S->>S: validate_config + política SSRF + nome único
+    S->>B: INSERT monitors (flush)
+    R->>B: COMMIT
+    R-->>M: MonitorOut (JSON, 201)
+    M-->>N: resposta + cabeçalhos de segurança

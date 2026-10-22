@@ -1,0 +1,13 @@
+flowchart LR
+    browser["Navegador"] -->|"páginas e /api/v1"| api
+    subgraph compose["Docker Compose (sua máquina)"]
+        api["api<br/>FastAPI + Jinja2"]
+        worker["worker<br/>asyncio"]
+        db[("PostgreSQL")]
+        migrate["migrate<br/>alembic upgrade head"]
+    end
+    api -->|"lê e grava"| db
+    worker -->|"transações curtas"| db
+    migrate -->|"cria tabelas"| db
+    worker -->|"checks HTTP"| alvos["APIs monitoradas"]
+    worker -->|"webhooks"| destinos["Destinos de alerta"]

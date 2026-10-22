@@ -1,0 +1,1 @@
+INSERT INTO checks (monitor_id, run_key, trigger, status, config_version, scheduled_at, started_at) VALUES (%(monitor_id)s::INTEGER, %(run_key)s::VARCHAR, %(trigger)s::VARCHAR, %(status)s::VARCHAR, %(config_version)s::INTEGER, %(scheduled_at)s::TIMESTAMP WITH TIME ZONE, %(started_at)s::TIMESTAMP WITH TIME ZONE) ON CONFLICT (run_key) DO NOTHING RETURNING checks.id

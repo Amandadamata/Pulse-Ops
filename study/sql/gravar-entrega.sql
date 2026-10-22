@@ -1,0 +1,1 @@
+UPDATE deliveries SET status=%(status)s::VARCHAR, last_error=%(last_error)s::VARCHAR, delivered_at=%(delivered_at)s::TIMESTAMP WITH TIME ZONE, updated_at=%(updated_at)s::TIMESTAMP WITH TIME ZONE WHERE deliveries.id = %(id_1)s::BIGINT AND deliveries.status = %(status_1)s::VARCHAR AND deliveries.attempt_count = %(attempt_count_1)s::INTEGER

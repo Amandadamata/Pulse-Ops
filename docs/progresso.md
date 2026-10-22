@@ -112,3 +112,17 @@ foi executado localmente (upgrade, downgrade e upgrade em banco novo).
 Falta: publicar e confirmar o resultado do CI.
 Bloqueios: nenhum repositório GitHub acessível nesta sessão (`list_repos` vazio);
 pedido o repositório de destino à Amanda em 2026-10-22.
+
+### Etapa 9 — Material de estudo
+Entregue: `docs/estudo/pulseops-por-dentro-volume-1.pdf` (partes A, B, C, E a J e
+gabarito; 79 páginas) e `docs/estudo/pulseops-por-dentro-volume-2.pdf` (parte D,
+código explicado arquivo por arquivo; 151 páginas). Fontes editáveis em
+`study/fonte/`; trechos de código copiados por `study/build.py` do commit
+registrado em `study/commit-explicado.txt`; SQL real capturado dos testes por
+`study/captura_sql.py`. Ao explicar `web/charts.py` apareceu o bug B10 (resumo do
+gráfico e latência média com bases diferentes), corrigido com teste de regressão.
+Como verifiquei: o build recusa gerar se o código mudou desde o commit explicado;
+os exercícios dos níveis 2 a 4 foram executados numa cópia descartável; as
+páginas dos dois PDFs foram renderizadas em imagem e revisadas.
+Falta: —
+Bloqueios: nenhum.
