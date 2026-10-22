@@ -6,6 +6,7 @@ import signal
 import sys
 
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncConnection
 
 from pulseops import __version__
 from pulseops.checks.checker import HttpChecker
@@ -24,6 +25,13 @@ logger = logging.getLogger("pulseops.worker")
 WORKER_LOCK_KEY = 0x50554C53  # "PULS"
 
 
+async def try_acquire_worker_lock(conn: AsyncConnection) -> bool:
+    """Lock de sessão do PostgreSQL: só uma conexão por banco consegue segurá-lo."""
+    got = await conn.scalar(text("SELECT pg_try_advisory_lock(:k)"), {"k": WORKER_LOCK_KEY})
+    await conn.commit()  # o lock é de sessão: continua valendo depois do commit
+    return bool(got)
+
+
 async def main() -> int:
     settings = Settings()
     configure_logging(settings.log_level)
@@ -35,11 +43,7 @@ async def main() -> int:
 
     # Conexão dedicada que segura o lock enquanto o processo vive.
     async with engine.connect() as lock_conn:
-        got_lock = await lock_conn.scalar(
-            text("SELECT pg_try_advisory_lock(:k)"), {"k": WORKER_LOCK_KEY}
-        )
-        await lock_conn.commit()  # o lock é de sessão: continua valendo depois do commit
-        if not got_lock:
+        if not await try_acquire_worker_lock(lock_conn):
             logger.error("outro worker já está rodando neste banco; apenas um é suportado")
             await engine.dispose()
             return 1
