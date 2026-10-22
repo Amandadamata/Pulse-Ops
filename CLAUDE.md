@@ -11,11 +11,17 @@ executado, nada de bugs/métricas inventados, roadmap não é funcionalidade.
 
 ```bash
 uv sync                                   # instalar dependências (inclui dev)
-docker compose up -d db                   # banco para desenvolvimento
-uv run alembic upgrade head               # migrações
-uv run pytest                             # testes (precisa de PostgreSQL; ver docs/estrategia-de-testes.md)
+docker run -d --name pulseops-testdb -e POSTGRES_USER=pulseops \
+  -e POSTGRES_PASSWORD=pulseops -p 127.0.0.1:5433:5432 postgres:16-alpine
+uv run pytest                             # testes (o banco pulseops_test é recriado a cada execução)
+uv run pytest --cov                       # cobertura; metas em docs/estrategia-de-testes.md
 uv run ruff check . && uv run ruff format --check .
 uv run mypy
-docker compose up --build                 # API + worker + banco
-./scripts/demo.sh                         # laboratório de falhas (perfil demo)
+uv run python scripts/conferir_referencias.py   # testes e arquivos citados nos docs existem
+docker compose up -d --build --wait       # API + worker + banco
+scripts/demo.sh                           # laboratório de falhas (perfil demo, 11 passos)
+scripts/ensaio_carga.sh                   # ensaio de carga (com a demo no ar)
 ```
+
+Neste ambiente de desenvolvimento, o build da imagem precisou de
+`PULSEOPS_EXTRA_CA_FILE=./docker/local-ca.pem` (proxy TLS; arquivo fora do Git).

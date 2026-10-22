@@ -4,7 +4,7 @@ Arquivo atualizado ao final de cada etapa. Datas em UTC.
 
 ## Situação atual
 
-Etapa atual: **4 — Domínio** (iniciada em 2026-10-22).
+Etapa atual: **9 — Material de estudo** (Etapas 1 a 7 concluídas; Etapa 8 pronta localmente, publicação aguardando o repositório de destino).
 
 ## Ambiente de desenvolvimento usado
 
@@ -47,3 +47,68 @@ consulta pela API (`tests/integration/test_first_slice.py`).
 Como verifiquei: `uv run pytest tests/integration/test_first_slice.py` → passed.
 Falta: —
 Bloqueios: nenhum.
+
+### Etapa 4 — Domínio
+Entregue: `domain/health.py` (`HealthTracker`), `services/processing.py`,
+`services/incidents.py`, retomada com lacunas, checks interrompidos,
+advisory lock do worker; testes de domínio e de consistência.
+Como verifiquei: `uv run pytest tests/unit/test_health.py tests/integration/test_incident_lifecycle.py tests/integration/test_consistency.py`
+→ todos passando; exemplo obrigatório do RF03 coberto por quatro testes
+`test_mandatory_example_*` e por `test_threshold_example_with_database`.
+Falta: —
+Bloqueios: nenhum.
+
+### Etapa 5 — Alertas
+Entregue: outbox (`alert_events`, `deliveries`, `delivery_attempts`), entregador em
+laço separado, backoff com teto, falha permanente, receptor do laboratório com
+deduplicação.
+Como verifiquei: `uv run pytest tests/integration/test_delivery.py tests/unit/test_lab_receiver.py`
+→ passando; `test_slow_webhook_does_not_block_checks` prova o isolamento.
+Falta: —
+Bloqueios: nenhum.
+
+### Etapa 6 — Interface e métricas
+Entregue: login com sessão e CSRF, painel, página do monitor com métricas e
+gráfico SVG, incidentes, notificações, API de histórico e métricas.
+Como verifiquei: 239 testes passando no fechamento da etapa (commit `b5c84be`);
+capturas reais com Chromium (Playwright) em desktop e celular, revisadas
+visualmente, em `docs/imagens/`. Bugs B4 e B5 encontrados e corrigidos.
+Falta: —
+Bloqueios: nenhum.
+
+### Laboratório de falhas
+Entregue: `compose.demo.yaml`, `scripts/demo.sh`, `scripts/demo_flow.py`.
+Como verifiquei: duas execuções seguidas de `scripts/demo.sh` com os 11 passos
+"ok" e código de saída 0 (a segunda reaproveitou os monitores); execução com
+senha errada terminou com "FALHOU: login recusado (HTTP 401)" e código 1. Bug B6
+encontrado ao escrever o roteiro.
+Falta: —
+Bloqueios: nenhum.
+
+### Etapa 7 — Revisão
+Entregue: revisão de segurança (modelo de ameaças com referências exatas aos
+testes; teste de SQL injection; inspeção do container), cobertura com metas,
+ensaio de carga, `docs/arquitetura.md`, `docs/estrategia-de-testes.md`,
+`docs/operacao.md`, `docs/matriz-de-rastreabilidade.md`,
+`scripts/conferir_referencias.py`. Bugs B7, B8 e B9 encontrados e corrigidos.
+Como verifiquei: `pip-audit` sem vulnerabilidades conhecidas; cobertura 95%
+(domínio 98%, segurança 97%); `docker inspect` mostrou usuário `pulseops`
+(uid 10001), raiz somente leitura, `cap_drop ALL`, banco sem porta publicada;
+ensaio de carga antes e depois do B8 em `docs/evidencias/`; instalação limpa a
+partir de um clone novo, com volume e imagem apagados antes (ver
+`docs/evidencias/instalacao-limpa.md`). Saídas registradas em
+`docs/evidencias/verificacao.md`.
+Falta: —
+Bloqueios: o build da imagem neste ambiente precisa do certificado do proxy TLS
+(`PULSEOPS_EXTRA_CA_FILE`); sem DNS público no ambiente, monitores para sites
+reais terminam em "falha de DNS" (comportamento correto, mas não deu para
+demonstrar um site real saudável aqui).
+
+### Etapa 8 — GitHub
+Entregue: `README.md`, `LICENSE` (MIT), `.github/workflows/ci.yml` com
+`permissions: contents: read`, screenshots reais.
+Como verifiquei: `actionlint` sem erros no workflow; o passo de migrações do CI
+foi executado localmente (upgrade, downgrade e upgrade em banco novo).
+Falta: publicar e confirmar o resultado do CI.
+Bloqueios: nenhum repositório GitHub acessível nesta sessão (`list_repos` vazio);
+pedido o repositório de destino à Amanda em 2026-10-22.
