@@ -13,6 +13,35 @@ worker assíncrono separado.
 *Captura real do painel durante o laboratório de falhas: o serviço principal está
 com incidente aberto depois de três respostas HTTP 500 seguidas.*
 
+## Para quem está avaliando
+
+O que o projeto mostra na prática, e onde conferir cada ponto:
+
+| Competência | Onde ver |
+|---|---|
+| Back-end em Python com FastAPI, API JSON e validação de entrada | [`src/pulseops/web/api.py`](src/pulseops/web/api.py), [`src/pulseops/web/schemas.py`](src/pulseops/web/schemas.py) |
+| Modelagem de dados e PostgreSQL: constraints, índices únicos parciais, migrações | [`src/pulseops/db/models.py`](src/pulseops/db/models.py), [`docs/arquitetura.md`](docs/arquitetura.md) |
+| Concorrência e consistência: `FOR UPDATE SKIP LOCKED`, advisory lock, transações curtas | [`src/pulseops/services/processing.py`](src/pulseops/services/processing.py), [`tests/integration/test_consistency.py`](tests/integration/test_consistency.py) |
+| Programação assíncrona (asyncio) num processo worker separado | [`src/pulseops/worker/runner.py`](src/pulseops/worker/runner.py) |
+| Regra de negócio isolada e testável, sem banco nem rede | [`src/pulseops/domain/health.py`](src/pulseops/domain/health.py), [`tests/unit/test_health.py`](tests/unit/test_health.py) |
+| Integração confiável entre sistemas: outbox, retentativas com backoff, deduplicação | [`src/pulseops/services/alerts.py`](src/pulseops/services/alerts.py), [ADR 0007](docs/decisoes/0007-outbox-e-entrega-pelo-menos-uma-vez.md) |
+| Segurança de aplicação: SSRF com DNS rebinding, CSRF, sessão, Argon2id, CSP | [`src/pulseops/security/`](src/pulseops/security/), [`docs/modelo-de-ameacas.md`](docs/modelo-de-ameacas.md) |
+| Testes automatizados com banco real, relógio falso e rede simulada (251 testes, 95% de cobertura) | [`tests/`](tests/), [`docs/estrategia-de-testes.md`](docs/estrategia-de-testes.md) |
+| Docker, Compose e CI com GitHub Actions (lint, tipos, testes, migrações, auditoria) | [`compose.yaml`](compose.yaml), [`.github/workflows/ci.yml`](.github/workflows/ci.yml) |
+| Diagnóstico e correção de bugs com causa e teste de regressão | [`docs/registro-de-bugs.md`](docs/registro-de-bugs.md) (10 bugs) |
+| Decisões técnicas justificadas, com alternativas descartadas | [`docs/decisoes/`](docs/decisoes/) (11 ADRs) |
+| Medição antes de afirmar: ensaio de carga e instalação limpa registrados | [`docs/evidencias/`](docs/evidencias/) |
+
+**Leitura em 10 minutos:** este README até "Regras importantes", depois
+[`src/pulseops/domain/health.py`](src/pulseops/domain/health.py) (a regra central) e
+um bug do [registro](docs/registro-de-bugs.md), como o B8, que foi achado pelo
+ensaio de carga.
+
+**Por que cada coisa é como é:** cada escolha que não é óbvia tem uma ADR em
+[`docs/decisoes/`](docs/decisoes/) com o contexto, as alternativas e as
+consequências. O guia de estudo em [`docs/estudo/`](docs/estudo/) explica o código
+arquivo por arquivo.
+
 ## Problema e cenário (fictício)
 
 > **Cenário fictício**, usado como base de requisitos: uma pequena equipe mantém
