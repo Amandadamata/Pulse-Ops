@@ -1,0 +1,68 @@
+# Ambiente padrão: banco, migrações, API e worker. Sem laboratório (ver compose.demo.yaml).
+name: pulseops
+
+x-app: &app
+  image: pulseops:local
+  build:
+    context: .
+    secrets: [extra_ca]
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    PULSEOPS_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-pulseops}:${POSTGRES_PASSWORD:-pulseops-local}@db:5432/${POSTGRES_DB:-pulseops}
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pulseops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pulseops-local}
+      POSTGRES_DB: ${POSTGRES_DB:-pulseops}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Sem "ports": o banco só é acessível pela rede interna do Compose.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  migrate:
+    <<: *app
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      db: {condition: service_healthy}
+    restart: "no"
+
+  api:
+    <<: *app
+    ports:
+      - "127.0.0.1:${PULSEOPS_PORT:-8000}:8000"
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/health/ready', timeout=3)"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  worker:
+    <<: *app
+    command: ["python", "-m", "pulseops.worker"]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+
+secrets:
+  extra_ca:
+    file: ${PULSEOPS_EXTRA_CA_FILE:-./docker/no-extra-ca.pem}

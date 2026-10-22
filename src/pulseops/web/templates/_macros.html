@@ -1,0 +1,28 @@
+{% macro health_badge(health, stale=False) -%}
+  {%- if stale -%}
+  <span class="badge badge-stale">Dados desatualizados</span>
+  {%- else -%}
+  <span class="badge badge-{{ health }}">{{ health | health_label }}</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro outcome_badge(outcome) -%}
+  <span class="badge badge-outcome-{{ outcome }}">{{ outcome | outcome_label }}</span>
+{%- endmacro %}
+
+{% macro incident_badge(status) -%}
+  <span class="badge badge-incident-{{ status }}">{{ status | incident_label }}</span>
+{%- endmacro %}
+
+{% macro field_error(errors, name) -%}
+  {%- if errors.get(name) -%}
+  <p class="field-error" id="{{ name }}-error">{{ errors[name] }}</p>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro action_button(url, label, csrf_token, style="secondary") -%}
+<form method="post" action="{{ url }}" class="inline-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button type="submit" class="button button-{{ style }}">{{ label }}</button>
+</form>
+{%- endmacro %}

@@ -10,3 +10,4 @@ htmlcov/
 build/
 dist/
 study/build/
+docker/local-ca.pem

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% from "_macros.html" import incident_badge %}
+{% block title %}Incidente #{{ detail.incident.id }}{% endblock %}
+{% block content %}
+{% set i = detail.incident %}
+<h1>Incidente #{{ i.id }} · <a href="/monitors/{{ detail.monitor.id }}">{{ detail.monitor.name }}</a></h1>
+<section class="card">
+  <p>{{ incident_badge(i.status) }}</p>
+  <dl class="inline-dl">
+    <div><dt>Primeira falha observada</dt><dd>{{ i.started_at | dt }}</dd></div>
+    <div><dt>Confirmação</dt><dd>{{ i.confirmed_at | dt }}</dd></div>
+    <div><dt>Fim</dt><dd>{{ i.ended_at | dt }}</dd></div>
+    <div><dt>Duração observada</dt><dd>{{ ((i.ended_at or now) - i.started_at) | duration }}{% if not i.ended_at %} (em andamento){% endif %}</dd></div>
+    <div><dt>Falhas registradas</dt><dd>{{ i.failure_count }}</dd></div>
+    <div><dt>Último resultado</dt><dd>{{ i.last_outcome | outcome_label }}: {{ i.last_explanation }}</dd></div>
+  </dl>
+  <p><strong>Motivo da abertura:</strong> {{ i.opening_reason }}</p>
+  {% if i.resolution_explanation %}<p><strong>Motivo do encerramento:</strong> {{ i.resolution_explanation }}</p>{% endif %}
+  <p class="muted small">Regras vigentes na abertura: {{ i.failure_threshold }} falha(s) para abrir, {{ i.recovery_threshold }} sucesso(s) para recuperar, timeout de {{ i.timeout_seconds }} s, limite de latência de {{ i.latency_threshold_ms }} ms.</p>
+</section>
+
+<section class="card" aria-labelledby="linha-titulo">
+  <h2 id="linha-titulo">Linha do tempo</h2>
+  <ol class="timeline">
+    {% for e in detail.events %}
+    <li><time>{{ e.occurred_at | dt }}</time> <strong>{{ e.kind | event_label }}</strong><br>{{ e.message }}</li>
+    {% endfor %}
+  </ol>
+</section>
+
+<section class="card" aria-labelledby="alertas-titulo">
+  <h2 id="alertas-titulo">Alertas deste incidente</h2>
+  {% include "_alerts_table.html" %}
+</section>
+{% endblock %}

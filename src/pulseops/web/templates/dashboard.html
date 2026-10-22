@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% from "_macros.html" import health_badge %}
+{% block title %}Monitores{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Monitores</h1>
+  <a class="button button-primary" href="/monitors/new">Novo monitor</a>
+</div>
+
+{% if not worker.alive %}
+<p class="alert alert-warning" role="alert">
+  {% if worker.last_seen_at %}
+  Worker sem sinal desde {{ worker.last_seen_at | dt }} (há {{ worker.age_seconds | int }} s).
+  {% else %}
+  Nenhum sinal do worker até agora.
+  {% endif %}
+  Os estados abaixo não estão sendo atualizados e aparecem como <strong>dados desatualizados</strong>.
+</p>
+{% endif %}
+
+<section aria-labelledby="resumo-titulo" class="summary" data-summary-url="/api/v1/summary">
+  <h2 id="resumo-titulo" class="visually-hidden">Resumo</h2>
+  <div class="summary-grid">
+    <div class="stat"><span class="stat-value" data-key="total">{{ summary.total }}</span><span class="stat-label">monitores</span></div>
+    <div class="stat stat-healthy"><span class="stat-value" data-key="healthy">{{ summary.by_health.get('healthy', 0) }}</span><span class="stat-label">saudáveis</span></div>
+    <div class="stat stat-degraded"><span class="stat-value" data-key="degraded">{{ summary.by_health.get('degraded', 0) }}</span><span class="stat-label">degradados</span></div>
+    <div class="stat stat-down"><span class="stat-value" data-key="down">{{ summary.by_health.get('down', 0) }}</span><span class="stat-label">indisponíveis</span></div>
+    <div class="stat"><span class="stat-value" data-key="no_data">{{ summary.by_health.get('no_data', 0) }}</span><span class="stat-label">sem dados</span></div>
+    <div class="stat"><span class="stat-value" data-key="paused">{{ summary.by_health.get('paused', 0) }}</span><span class="stat-label">pausados</span></div>
+    <div class="stat stat-stale"><span class="stat-value" data-key="stale">{{ summary.stale }}</span><span class="stat-label">desatualizados</span></div>
+    <div class="stat"><span class="stat-value" data-key="open_incidents">{{ summary.open_incidents }}</span><span class="stat-label">incidentes abertos</span></div>
+    <div class="stat"><span class="stat-value" data-key="failed_deliveries">{{ summary.failed_deliveries }}</span><span class="stat-label">alertas com falha</span></div>
+  </div>
+  <p class="muted small" aria-live="polite" data-summary-status>Resumo gerado no carregamento da página.</p>
+</section>
+
+{% if rows %}
+<table class="data-table">
+  <caption class="visually-hidden">Lista de monitores</caption>
+  <thead>
+    <tr><th scope="col">Nome</th><th scope="col">Saúde</th><th scope="col">Situação</th><th scope="col">Último check</th><th scope="col">Explicação</th></tr>
+  </thead>
+  <tbody>
+    {% for monitor, stale in rows %}
+    <tr>
+      <td><a href="/monitors/{{ monitor.id }}">{{ monitor.name }}</a><br><span class="muted small url">{{ monitor.method }} {{ monitor.url }}</span></td>
+      <td>{{ health_badge(monitor.health, stale) }}</td>
+      <td>{{ monitor.state | state_label }}</td>
+      <td>{{ monitor.last_check_at | dt }}</td>
+      <td class="reason">{{ monitor.health_reason }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+  <p><strong>Nenhum monitor cadastrado.</strong></p>
+  <p>Cadastre o primeiro endpoint para começar a acompanhar disponibilidade e latência.</p>
+  <a class="button button-primary" href="/monitors/new">Cadastrar monitor</a>
+</div>
+{% endif %}
+<p class="small">
+  {% if show_archived %}<a href="/">Ocultar arquivados</a>{% else %}<a href="/?archived=true">Mostrar arquivados</a>{% endif %}
+</p>
+{% endblock %}

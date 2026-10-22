@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% from "_macros.html" import incident_badge %}
+{% block title %}Incidentes{% endblock %}
+{% block content %}
+<h1>Incidentes</h1>
+<nav aria-label="Filtro de incidentes" class="tabs">
+  {% for s, label in [("open", "Abertos"), ("closed", "Encerrados"), ("all", "Todos")] %}
+  <a href="?status={{ s }}" {% if status == s %}aria-current="page"{% endif %}>{{ label }}</a>
+  {% endfor %}
+</nav>
+{% if page.items %}
+<table class="data-table">
+  <thead><tr><th scope="col">#</th><th scope="col">Monitor</th><th scope="col">Situação</th><th scope="col">Primeira falha</th><th scope="col">Confirmado</th><th scope="col">Fim</th><th scope="col">Motivo da abertura</th></tr></thead>
+  <tbody>
+  {% for incident, monitor in page.items %}
+    <tr>
+      <td><a href="/incidents/{{ incident.id }}">#{{ incident.id }}</a></td>
+      <td><a href="/monitors/{{ monitor.id }}">{{ monitor.name }}</a></td>
+      <td>{{ incident_badge(incident.status) }}</td>
+      <td>{{ incident.started_at | dt }}</td>
+      <td>{{ incident.confirmed_at | dt }}</td>
+      <td>{{ incident.ended_at | dt }}</td>
+      <td>{{ incident.opening_reason }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% if page.next_cursor %}<p><a href="?status={{ status }}&amp;cursor={{ page.next_cursor }}">Mais antigos →</a></p>{% endif %}
+{% else %}
+<div class="empty-state"><p>{% if status == "open" %}Nenhum incidente aberto.{% else %}Nenhum incidente neste filtro.{% endif %}</p></div>
+{% endif %}
+{% endblock %}

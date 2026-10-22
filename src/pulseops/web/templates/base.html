@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}PulseOps{% endblock %} · PulseOps</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+  {% if demo_mode %}
+  <div class="demo-banner" role="note">
+    <strong>Modo demonstração.</strong> Intervalos curtos e alvos do laboratório local liberados. Não use em produção.
+  </div>
+  {% endif %}
+  <header class="topbar">
+    <a class="brand" href="/">PulseOps</a>
+    {% if operator %}
+    <nav aria-label="Principal">
+      <ul>
+        <li><a href="/">Monitores</a></li>
+        <li><a href="/incidents">Incidentes</a></li>
+        <li><a href="/notifications">Notificações</a></li>
+      </ul>
+    </nav>
+    <form method="post" action="/logout" class="logout">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <span class="muted">{{ operator.username }}</span>
+      <button type="submit" class="link-button">Sair</button>
+    </form>
+    {% endif %}
+  </header>
+  <main id="conteudo" tabindex="-1">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="footer muted">
+    Horários exibidos em {{ tz_name }} (armazenados em UTC).
+  </footer>
+</body>
+</html>

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from "_macros.html" import field_error %}
+{% block title %}{% if monitor %}Editar {{ monitor.name }}{% else %}Novo monitor{% endif %}{% endblock %}
+{% block content %}
+<h1>{% if monitor %}Editar monitor{% else %}Novo monitor{% endif %}</h1>
+{% if errors %}
+<p class="alert alert-error" role="alert">Revise os campos destacados ({{ errors | length }}).</p>
+{% endif %}
+<form method="post" action="{% if monitor %}/monitors/{{ monitor.id }}/edit{% else %}/monitors/new{% endif %}" class="card form-grid" novalidate>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+  <div class="field field-wide">
+    <label for="name">Nome</label>
+    <input id="name" name="name" value="{{ form.name }}" required maxlength="100" {% if errors.name %}aria-invalid="true" aria-describedby="name-error"{% endif %}>
+    {{ field_error(errors, 'name') }}
+  </div>
+  <div class="field field-wide">
+    <label for="url">URL</label>
+    <input id="url" name="url" value="{{ form.url }}" required maxlength="2048" inputmode="url" {% if errors.url %}aria-invalid="true" aria-describedby="url-error"{% endif %}>
+    <p class="hint">Somente http/https, sem usuário e senha na URL. Redirecionamentos não são seguidos.</p>
+    {{ field_error(errors, 'url') }}
+  </div>
+  <div class="field field-wide">
+    <label for="description">Descrição (opcional)</label>
+    <input id="description" name="description" value="{{ form.description }}" maxlength="500">
+    {{ field_error(errors, 'description') }}
+  </div>
+  <div class="field">
+    <label for="method">Método</label>
+    <select id="method" name="method">
+      {% for m in ["GET", "HEAD"] %}<option value="{{ m }}" {% if form.method == m %}selected{% endif %}>{{ m }}</option>{% endfor %}
+    </select>
+    {{ field_error(errors, 'method') }}
+  </div>
+  <div class="field">
+    <label for="accepted_status_codes">Status aceitos</label>
+    <input id="accepted_status_codes" name="accepted_status_codes" value="{{ form.accepted_status_codes }}" maxlength="100" {% if errors.accepted_status_codes %}aria-invalid="true" aria-describedby="accepted_status_codes-error"{% endif %}>
+    <p class="hint">Exemplo: 200-299,301</p>
+    {{ field_error(errors, 'accepted_status_codes') }}
+  </div>
+  {% for name, label, hint in [
+      ("interval_seconds", "Intervalo (s)", "Entre verificações. Mínimo 30 s (2 s no modo demonstração)."),
+      ("timeout_seconds", "Timeout (s)", "1 a 30 s, menor que o intervalo."),
+      ("latency_threshold_ms", "Limite de latência (ms)", "Acima disso a resposta é lenta. Até o timeout."),
+      ("failure_threshold", "Falhas para abrir incidente", "Falhas consecutivas, 1 a 10."),
+      ("recovery_threshold", "Sucessos para recuperar", "Sucessos consecutivos, 1 a 10."),
+  ] %}
+  <div class="field">
+    <label for="{{ name }}">{{ label }}</label>
+    <input id="{{ name }}" name="{{ name }}" value="{{ form[name] }}" inputmode="numeric" required {% if errors[name] %}aria-invalid="true" aria-describedby="{{ name }}-error"{% endif %}>
+    <p class="hint">{{ hint }}</p>
+    {{ field_error(errors, name) }}
+  </div>
+  {% endfor %}
+  <div class="field field-wide actions">
+    <button type="submit" class="button button-primary">Salvar</button>
+    <a class="button button-secondary" href="{% if monitor %}/monitors/{{ monitor.id }}{% else %}/{% endif %}">Cancelar</a>
+  </div>
+  {% if monitor %}
+  <p class="hint field-wide">Mudar URL, método, status aceitos, timeout, limite de latência ou limiares reinicia os contadores de falhas e sucessos.</p>
+  {% endif %}
+</form>
+{% endblock %}

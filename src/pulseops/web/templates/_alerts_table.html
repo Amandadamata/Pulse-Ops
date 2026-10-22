@@ -1,0 +1,34 @@
+{% set alert_list = detail.alerts if detail is defined else alerts %}
+{% if alert_list %}
+<table class="data-table">
+  <thead><tr><th scope="col">Evento</th><th scope="col">Criado</th><th scope="col">Destino</th><th scope="col">Entrega</th><th scope="col">Tentativas</th></tr></thead>
+  <tbody>
+  {% for a in alert_list %}
+    {% if a.deliveries %}
+      {% for d in a.deliveries %}
+      <tr>
+        <td><code>{{ a.event.event_key }}</code><br><a class="small" href="/incidents/{{ a.event.incident_id }}">incidente #{{ a.event.incident_id }}</a></td>
+        <td>{{ a.event.created_at | dt }}</td>
+        <td>{{ d.destination.name }}</td>
+        <td><span class="badge badge-delivery-{{ d.delivery.status }}">{{ d.delivery.status | delivery_label }}</span>
+          {% if d.delivery.status == "pending" and d.delivery.attempt_count %}<br><span class="small muted">próxima tentativa {{ d.delivery.next_attempt_at | dt }}</span>{% endif %}
+          {% if d.delivery.last_error %}<br><span class="small muted">{{ d.delivery.last_error }}</span>{% endif %}
+        </td>
+        <td>
+          {% if d.attempts %}
+          <ol class="attempts">
+            {% for t in d.attempts %}<li>{{ t.attempted_at | dt }} · {{ t.status_code or "sem resposta" }} · {{ t.duration_ms }} ms{% if t.error %} · {{ t.error }}{% endif %}</li>{% endfor %}
+          </ol>
+          {% else %}<span class="muted">nenhuma ainda</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    {% else %}
+      <tr><td><code>{{ a.event.event_key }}</code></td><td>{{ a.event.created_at | dt }}</td><td colspan="3" class="muted">Nenhum destino ativo quando o evento foi criado.</td></tr>
+    {% endif %}
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-inline">Nenhum alerta gerado.</p>
+{% endif %}

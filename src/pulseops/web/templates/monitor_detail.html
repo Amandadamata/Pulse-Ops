@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% from "_macros.html" import health_badge, outcome_badge, incident_badge, action_button %}
+{% block title %}{{ monitor.name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>{{ monitor.name }}</h1>
+    <p class="muted url">{{ monitor.method }} {{ monitor.url }}</p>
+    {% if monitor.description %}<p>{{ monitor.description }}</p>{% endif %}
+  </div>
+  <div class="actions">
+    {% if monitor.state == "active" %}
+      {{ action_button("/monitors/%d/check" % monitor.id, "Verificar agora", csrf_token) }}
+      <a class="button button-secondary" href="/monitors/{{ monitor.id }}/edit">Editar</a>
+      {{ action_button("/monitors/%d/pause" % monitor.id, "Pausar", csrf_token) }}
+    {% elif monitor.state == "paused" %}
+      {{ action_button("/monitors/%d/resume" % monitor.id, "Retomar", csrf_token, "primary") }}
+      <a class="button button-secondary" href="/monitors/{{ monitor.id }}/edit">Editar</a>
+    {% endif %}
+    {% if monitor.state != "archived" %}
+      {{ action_button("/monitors/%d/archive" % monitor.id, "Arquivar", csrf_token, "danger") }}
+    {% endif %}
+  </div>
+</div>
+
+<section class="card status-card" aria-labelledby="estado-titulo">
+  <h2 id="estado-titulo">Estado atual</h2>
+  <p>{{ health_badge(monitor.health, stale) }} <span class="muted">· {{ monitor.state | state_label }} · desde {{ monitor.health_changed_at | dt }}</span></p>
+  <p class="reason-large">{{ monitor.health_reason }}</p>
+  {% if stale %}
+  <p class="alert alert-warning">
+    {% if not worker.alive %}O worker não envia sinal{% if worker.last_seen_at %} desde {{ worker.last_seen_at | dt }}{% endif %}.
+    {% else %}O último check é mais antigo que o esperado para o intervalo de {{ monitor.interval_seconds }} s.{% endif %}
+    O estado acima pode não refletir a situação atual do serviço.
+  </p>
+  {% endif %}
+  <dl class="inline-dl">
+    <div><dt>Falhas seguidas</dt><dd>{{ monitor.consecutive_failures }} de {{ monitor.failure_threshold }}</dd></div>
+    <div><dt>Sucessos seguidos</dt><dd>{{ monitor.consecutive_successes }}{% if monitor.health == "down" %} de {{ monitor.recovery_threshold }}{% endif %}</dd></div>
+    <div><dt>Intervalo</dt><dd>{{ monitor.interval_seconds }} s</dd></div>
+    <div><dt>Timeout</dt><dd>{{ monitor.timeout_seconds }} s</dd></div>
+    <div><dt>Limite de latência</dt><dd>{{ monitor.latency_threshold_ms }} ms</dd></div>
+    <div><dt>Status aceitos</dt><dd>{{ monitor.accepted_status_codes }}</dd></div>
+    <div><dt>Próximo check</dt><dd>{{ monitor.next_run_at | dt }}</dd></div>
+  </dl>
+</section>
+
+<section class="card" aria-labelledby="metricas-titulo">
+  <div class="section-header">
+    <h2 id="metricas-titulo">Métricas</h2>
+    <nav aria-label="Janela das métricas" class="tabs">
+      {% for w, label in [("1h", "1 hora"), ("24h", "24 horas"), ("7d", "7 dias")] %}
+      <a href="?window={{ w }}" {% if window == w %}aria-current="page"{% endif %}>{{ label }}</a>
+      {% endfor %}
+    </nav>
+  </div>
+  <p class="muted small">Janela de {{ metrics.start | dt }} a {{ metrics.end | dt }} (início incluído, fim excluído).</p>
+  {% if metrics.evaluated == 0 %}
+  <p class="empty-inline">Sem checks nesta janela. As métricas aparecem como N/A em vez de 0% ou 100%.</p>
+  {% endif %}
+  <div class="summary-grid">
+    <div class="stat"><span class="stat-value">{{ metrics.evaluated }}</span><span class="stat-label">checks avaliados</span></div>
+    <div class="stat"><span class="stat-value">{{ metrics.available_pct | pct }}</span><span class="stat-label">checks disponíveis</span></div>
+    <div class="stat"><span class="stat-value">{{ metrics.healthy_pct | pct }}</span><span class="stat-label">checks saudáveis</span></div>
+    <div class="stat"><span class="stat-value">{{ metrics.latency_avg_ms | ms }}</span><span class="stat-label">latência média</span></div>
+    <div class="stat"><span class="stat-value">{{ metrics.latency_p95_ms | ms }}</span><span class="stat-label">p95 (n = {{ metrics.latency_samples }})</span></div>
+    <div class="stat"><span class="stat-value">{{ metrics.incident_count }}</span><span class="stat-label">incidentes</span></div>
+    <div class="stat"><span class="stat-value">{{ metrics.incident_duration | duration }}</span><span class="stat-label">duração observada</span></div>
+    <div class="stat"><span class="stat-value small-value">{{ metrics.last_check_at | dt }}</span><span class="stat-label">último check</span></div>
+  </div>
+  <p class="muted small">
+    "Checks disponíveis" é a proporção de verificações com status aceito (rápidas ou lentas), não o tempo exato em que o serviço esteve no ar.
+    {% if metrics.internal_errors %}{{ metrics.internal_errors }} erro(s) interno(s) do PulseOps ficaram fora da conta.{% endif %}
+    {% if metrics.latency_samples and metrics.latency_samples < 20 %}Com menos de 20 amostras, o p95 é o maior valor observado.{% endif %}
+  </p>
+  {% if metrics.gaps %}
+  <h3>Períodos sem verificações</h3>
+  <ul>
+    {% for gap in metrics.gaps %}<li>{{ gap.gap_start | dt }} a {{ gap.gap_end | dt }} (worker parado ou atrasado)</li>{% endfor %}
+  </ul>
+  {% endif %}
+</section>
+
+<section class="card" aria-labelledby="grafico-titulo">
+  <h2 id="grafico-titulo">Latência dos checks</h2>
+  {% if chart %}
+  <figure class="chart">
+    <svg viewBox="0 0 {{ chart.width }} {{ chart.height }}" role="img" aria-labelledby="grafico-titulo grafico-desc" preserveAspectRatio="none">
+      <desc id="grafico-desc">{{ chart.summary }}</desc>
+      {% for y, label in chart.y_ticks %}
+      <line x1="{{ chart.plot_left }}" x2="{{ chart.plot_right }}" y1="{{ y }}" y2="{{ y }}" class="grid"/>
+      <text x="{{ chart.plot_left - 6 }}" y="{{ y + 4 }}" class="axis-label" text-anchor="end">{{ label }}</text>
+      {% endfor %}
+      <line x1="{{ chart.plot_left }}" x2="{{ chart.plot_right }}" y1="{{ chart.threshold_y }}" y2="{{ chart.threshold_y }}" class="threshold"/>
+      <polyline points="{{ chart.polyline }}" class="series"/>
+      {% for dot in chart.dots %}
+      <circle cx="{{ dot.x }}" cy="{{ dot.y }}" r="3" class="dot dot-{{ dot.outcome }}"><title>{{ dot.label }}</title></circle>
+      {% endfor %}
+    </svg>
+    <figcaption class="muted small">{{ chart.summary }} Linha tracejada: limite de latência. Pontos quadrados de cor escura indicam falha; a tabela abaixo traz os mesmos dados em texto.</figcaption>
+  </figure>
+  {% else %}
+  <p class="empty-inline">Sem dados para o gráfico nesta janela.</p>
+  {% endif %}
+</section>
+
+<section class="card" aria-labelledby="mudancas-titulo">
+  <h2 id="mudancas-titulo">Mudanças de estado</h2>
+  {% if changes %}
+  <ol class="timeline">
+    {% for c in changes %}
+    <li><time>{{ c.changed_at | dt }}</time> <strong>{{ c.from_health | health_label }} → {{ c.to_health | health_label }}</strong><br>{{ c.reason }}</li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="empty-inline">Nenhuma mudança de estado registrada.</p>
+  {% endif %}
+</section>
+
+<section class="card" aria-labelledby="incidentes-titulo">
+  <h2 id="incidentes-titulo">Incidentes deste monitor</h2>
+  {% if incidents %}
+  <ul class="plain-list">
+    {% for i in incidents %}
+    <li>{{ incident_badge(i.status) }} <a href="/incidents/{{ i.id }}">Incidente #{{ i.id }}</a> — confirmado em {{ i.confirmed_at | dt }}{% if i.ended_at %}, encerrado em {{ i.ended_at | dt }}{% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty-inline">Nenhum incidente.</p>
+  {% endif %}
+</section>
+
+<section class="card" aria-labelledby="checks-titulo">
+  <div class="section-header">
+    <h2 id="checks-titulo">Histórico de checks</h2>
+    <form method="get" class="inline-form">
+      <input type="hidden" name="window" value="{{ window }}">
+      <label for="outcome">Resultado</label>
+      <select id="outcome" name="outcome">
+        <option value="">Todos</option>
+        {% for o in outcomes %}<option value="{{ o.value }}" {% if outcome == o.value %}selected{% endif %}>{{ o.label }}</option>{% endfor %}
+      </select>
+      <button type="submit" class="button button-secondary">Filtrar</button>
+    </form>
+  </div>
+  {% if checks.items %}
+  <table class="data-table">
+    <thead><tr><th scope="col">Início</th><th scope="col">Resultado</th><th scope="col">HTTP</th><th scope="col">Duração</th><th scope="col">Explicação</th><th scope="col">Origem</th></tr></thead>
+    <tbody>
+      {% for c in checks.items %}
+      <tr>
+        <td>{{ c.started_at | dt }}</td>
+        <td>{{ outcome_badge(c.outcome) }}</td>
+        <td>{{ c.status_code or "—" }}</td>
+        <td>{{ c.duration_ms }} ms</td>
+        <td>{{ c.explanation }}</td>
+        <td>{{ "manual" if c.trigger == "manual" else "agendado" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if checks.next_cursor %}<p><a href="?window={{ window }}&amp;outcome={{ outcome }}&amp;cursor={{ checks.next_cursor }}">Checks mais antigos →</a></p>{% endif %}
+  {% else %}
+  <p class="empty-inline">{% if outcome %}Nenhum check com esse resultado.{% else %}Sem dados: nenhum check concluído ainda.{% endif %}</p>
+  {% endif %}
+</section>
+{% endblock %}
