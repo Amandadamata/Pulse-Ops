@@ -1,0 +1,81 @@
+# Integração contínua: lint, tipos, testes com PostgreSQL, migrações, auditoria e
+# imagem Docker com o roteiro do laboratório. Não implanta nada (não é CD).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualidade:
+    name: Lint, tipos, testes e migrações
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: pulseops
+          POSTGRES_PASSWORD: pulseops
+          POSTGRES_DB: pulseops
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pulseops"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      PULSEOPS_TEST_DATABASE_URL: postgresql+psycopg://pulseops:pulseops@127.0.0.1:5433/pulseops_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.32"
+      - name: Instalar dependências (uv.lock)
+        run: uv sync --frozen
+      - name: Ruff (lint)
+        run: uv run ruff check .
+      - name: Ruff (formatação)
+        run: uv run ruff format --check .
+      - name: mypy
+        run: uv run mypy
+      - name: Migrações em banco limpo
+        env:
+          PULSEOPS_DATABASE_URL: postgresql+psycopg://pulseops:pulseops@127.0.0.1:5433/pulseops
+        run: |
+          uv run alembic upgrade head
+          uv run alembic downgrade base
+          uv run alembic upgrade head
+      - name: Testes com cobertura
+        run: uv run pytest --cov --cov-report=term --cov-fail-under=90
+      - name: Metas de cobertura de domínio e segurança
+        run: |
+          uv run coverage report --include='src/pulseops/domain/*' --fail-under=95
+          uv run coverage report --include='src/pulseops/security/*' --fail-under=95
+      - name: Referências da documentação
+        run: uv run python scripts/conferir_referencias.py
+      - name: Auditoria de dependências (pip-audit)
+        run: |
+          uv export --frozen --no-emit-project --no-hashes -o requirements-audit.txt
+          uvx pip-audit==2.9.0 -r requirements-audit.txt --disable-pip --no-deps
+
+  docker:
+    name: Imagem Docker e laboratório
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Roteiro do laboratório (sobe tudo e verifica os 11 passos)
+        run: scripts/demo.sh
+      - name: Logs em caso de falha
+        if: failure()
+        run: docker compose -f compose.yaml -f compose.demo.yaml --profile demo logs --tail 200
+      - name: Derrubar
+        if: always()
+        run: scripts/demo.sh --down

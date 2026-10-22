@@ -67,7 +67,7 @@ inglês avançado.
 ## Matriz de competências
 
 Versão da Etapa 1: **caminhos planejados**, ainda não existentes. Esta tabela
-será revisada com os caminhos reais ao final da implementação. A matriz
+foi revisada com os caminhos reais ao final da implementação (Etapa 7, 2026-10-22). A matriz
 completa requisito → código → teste ficará em
 [`matriz-de-rastreabilidade.md`](matriz-de-rastreabilidade.md).
 
@@ -76,15 +76,15 @@ completa requisito → código → teste ficará em
 | Python, fundamentos e OO | Máquina de estados de saúde e incidentes (classe com regra encapsulada) | `src/pulseops/domain/health.py` | `tests/unit/test_health.py` |
 | FastAPI e APIs REST | API JSON de monitores, checks, incidentes e notificações | `src/pulseops/web/api.py`, `src/pulseops/web/schemas.py` | `tests/integration/test_api_monitors.py` |
 | Pydantic | Contratos de entrada/saída e configuração | `src/pulseops/web/schemas.py`, `src/pulseops/config.py` | `tests/integration/test_api_monitors.py`, `tests/unit/test_config.py` |
-| SQL, PostgreSQL, modelagem relacional | Tabelas com FKs, CHECKs e índice único parcial de incidente aberto | `src/pulseops/db/models.py`, `migrations/versions/` | `tests/integration/test_constraints.py` |
-| SQLAlchemy 2.x | ORM com `Mapped[...]` e `select()`, sessão por unidade de trabalho | `src/pulseops/db/`, `src/pulseops/services/` | `tests/integration/test_processing.py` |
+| SQL, PostgreSQL, modelagem relacional | Tabelas com FKs, CHECKs e índice único parcial de incidente aberto | `src/pulseops/db/models.py`, `migrations/versions/` | `tests/integration/test_consistency.py::test_database_rejects_second_open_incident`, `test_database_rejects_second_running_check` |
+| SQLAlchemy 2.x | ORM com `Mapped[...]` e `select()`, sessão por unidade de trabalho | `src/pulseops/db/`, `src/pulseops/services/` | `tests/integration/test_incident_lifecycle.py`, `tests/integration/test_consistency.py` |
 | Alembic | Migração inicial aplicada em banco limpo | `migrations/` | `tests/integration/test_migrations.py`, CI |
 | Testes unitários e de integração (Pytest) | Suíte com PostgreSQL real, relógio controlável e `httpx.MockTransport` | `tests/` | `uv run pytest` |
 | Docker e Docker Compose | API, worker, banco e laboratório | `Dockerfile`, `compose.yaml` | `scripts/demo.sh` |
-| Git e CI | Workflow com lint, tipos, testes, migrações e build | `.github/workflows/ci.yml` | execução do workflow (ver README) |
+| Git e CI | Workflow com lint, tipos, testes, migrações e build | `.github/workflows/ci.yml` | workflow do repositório (ver README) |
 | Type hints | mypy em modo estrito no pacote | `pyproject.toml` | `uv run mypy` |
-| Processamento assíncrono | Worker com `asyncio`, semáforo e cliente HTTP reutilizado | `src/pulseops/worker/` | `tests/integration/test_worker.py` |
-| Observabilidade | Logs JSON com contexto, heartbeat do worker, liveness/readiness | `src/pulseops/logging.py`, `src/pulseops/web/health.py` | `tests/integration/test_health_endpoints.py`, `tests/unit/test_logging.py` |
+| Processamento assíncrono | Worker com `asyncio`, limite de concorrência e cliente HTTP reutilizado | `src/pulseops/worker/` | `tests/integration/test_consistency.py::test_dispatcher_refills_freed_slots_without_waiting_a_tick`, `tests/integration/test_delivery.py::test_slow_webhook_does_not_block_checks` |
+| Observabilidade | Logs JSON com contexto, heartbeat do worker, liveness/readiness | `src/pulseops/logs.py`, `src/pulseops/web/health.py` | `tests/integration/test_health_endpoints.py`, `tests/unit/test_logging.py` |
 | Segurança de APIs | Sessão HttpOnly, CSRF, proteção SSRF | `src/pulseops/security/` | `tests/unit/test_url_policy.py`, `tests/integration/test_auth.py` |
 
 ## Projetos de referência
@@ -123,9 +123,9 @@ descrevem o que a página mostrava em 2026-10-22.
 
 | Issue | Problema relatado | Decisão para o PulseOps | Cenário de teste |
 |---|---|---|---|
-| [uptime-kuma#4058](https://github.com/louislam/uptime-kuma/issues/4058) — "getaddrinfo ENOTFOUND causes monitors to freeze" | Monitores ficaram presos em "down" depois de falha de DNS. Comentários apontam que o envio de notificação (`sendNotification`) pode travar e bloquear o ciclo do monitor; o mantenedor sugeriu não aguardar o envio. | Verificação e envio de alerta são **laços separados** no worker. A verificação só grava um evento no banco; o envio acontece em outra tarefa, com timeout próprio. | Cenário 16: webhook lento/indisponível não impede novas verificações (`tests/integration/test_alert_isolation.py`). |
+| [uptime-kuma#4058](https://github.com/louislam/uptime-kuma/issues/4058) — "getaddrinfo ENOTFOUND causes monitors to freeze" | Monitores ficaram presos em "down" depois de falha de DNS. Comentários apontam que o envio de notificação (`sendNotification`) pode travar e bloquear o ciclo do monitor; o mantenedor sugeriu não aguardar o envio. | Verificação e envio de alerta são **laços separados** no worker. A verificação só grava um evento no banco; o envio acontece em outra tarefa, com timeout próprio. | Cenário 16: webhook lento/indisponível não impede novas verificações (`tests/integration/test_delivery.py::test_slow_webhook_does_not_block_checks`; passo 10 da demo). |
 | [uptime-kuma#6046](https://github.com/louislam/uptime-kuma/issues/6046) — "Notification lost if service is temporarily unavailable" | Se o serviço de notificação estiver fora no momento do evento, a notificação se perde, sem nova tentativa. Mantenedor observou que repetir automaticamente em todo erro 500 pode gerar alarmes indesejados. | Padrão outbox: evento persistido na mesma transação da mudança de incidente, **retentativas limitadas com backoff e teto**, registro de cada tentativa, falha permanente explícita. | Cenário 17: receptor indisponível, depois restaurado, recebe o evento (`tests/integration/test_delivery.py`, passo 11 da demo). |
-| [uptime-kuma#3255](https://github.com/louislam/uptime-kuma/issues/3255) — notificações chegando em dobro | Cada notificação chegava duas vezes; a causa indicada na conversa foi uma **segunda instância** rodando ao mesmo tempo. | (a) Apenas um worker suportado, garantido por *advisory lock* do PostgreSQL (um segundo worker não inicia). (b) Cada evento tem identidade estável (`X-PulseOps-Event-Id`) para o receptor deduplicar. (c) Entrega documentada como "pelo menos uma vez". | Teste de segundo worker recusado (`tests/integration/test_worker.py`) e deduplicação no receptor do laboratório (`tests/unit/test_lab_receiver.py`). |
+| [uptime-kuma#3255](https://github.com/louislam/uptime-kuma/issues/3255) — notificações chegando em dobro | Cada notificação chegava duas vezes; a causa indicada na conversa foi uma **segunda instância** rodando ao mesmo tempo. | (a) Apenas um worker suportado, garantido por *advisory lock* do PostgreSQL (um segundo worker não inicia). (b) Cada evento tem identidade estável (`X-PulseOps-Event-Id`) para o receptor deduplicar. (c) Entrega documentada como "pelo menos uma vez". | Teste de segundo worker recusado (`tests/integration/test_consistency.py::test_second_worker_is_refused`) e deduplicação no receptor do laboratório (`tests/unit/test_lab_receiver.py`). |
 
 ## Documentação oficial consultada
 

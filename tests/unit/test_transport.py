@@ -7,6 +7,7 @@ import pytest
 
 from pulseops.security.transport import (
     GuardedNetworkBackend,
+    SystemResolver,
     build_guarded_client,
     validate_destination,
 )
@@ -104,6 +105,29 @@ async def test_dns_failure_becomes_connect_error() -> None:
     backend = GuardedNetworkBackend(DestinationPolicy(), FakeResolver(), RecordingBackend())
     with pytest.raises(httpcore.ConnectError):
         await backend.connect_tcp("x.invalid", 443)
+
+
+async def test_name_without_addresses_is_refused() -> None:
+    backend = GuardedNetworkBackend(
+        DestinationPolicy(), FakeResolver({"vazio.example": []}), RecordingBackend()
+    )
+    with pytest.raises(httpcore.ConnectError, match="não tem endereços"):
+        await backend.connect_tcp("vazio.example", 443)
+
+
+async def test_unix_sockets_are_refused() -> None:
+    backend = GuardedNetworkBackend(DestinationPolicy(), FakeResolver(), RecordingBackend())
+    with pytest.raises(UnsafeDestinationError):
+        await backend.connect_unix_socket("/var/run/docker.sock")
+
+
+async def test_system_resolver_uses_getaddrinfo_and_its_answer_is_validated() -> None:
+    """`localhost` resolve pelo /etc/hosts, sem rede; o resultado é loopback e seria recusado."""
+    addresses = await SystemResolver().resolve("localhost", 80)
+    assert addresses and all(a.is_loopback for a in addresses)
+    backend = GuardedNetworkBackend(DestinationPolicy(), SystemResolver(), RecordingBackend())
+    with pytest.raises(UnsafeDestinationError):
+        await backend.connect_tcp("localhost", 80)
 
 
 async def test_clients_ignore_proxy_environment(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -11,8 +11,10 @@ precisam acontecer em paralelo sem uma thread por monitor.
   processo (um para checks, outro para webhooks) e fechado no encerramento.
 - SQLAlchemy 2.x assíncrono com o driver **psycopg 3** (o mesmo driver serve ao
   Alembic, que roda de forma síncrona).
-- Concorrência limitada por `asyncio.Semaphore`
-  (`PULSEOPS_WORKER_CONCURRENCY`, padrão 20).
+- Concorrência limitada a `PULSEOPS_WORKER_CONCURRENCY` (padrão 20) checks em
+  andamento. *Revisão na implementação:* em vez de `asyncio.Semaphore`, o laço
+  reserva no banco só o número de vagas livres, para não marcar como `running`
+  checks que ainda iriam esperar na fila do semáforo. Veja também o bug B8.
 - Uma `AsyncSession` por unidade de trabalho; nenhuma sessão é compartilhada
   entre tarefas.
 - Sequência de um check: (1) transação curta que reserva a execução e grava o
