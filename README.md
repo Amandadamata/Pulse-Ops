@@ -8,7 +8,7 @@ decisão e entrega alertas por webhook sem travar as verificações.
 Projeto pessoal de estudo, construído em Python com FastAPI, PostgreSQL e um
 worker assíncrono separado.
 
-![Painel do PulseOps com um monitor indisponível e um saudável](docs/imagens/painel.png)
+![Painel do PulseOps durante a demonstração: dois monitores indisponíveis e um saudável](docs/imagens/painel.png)
 
 *Captura real do painel durante o laboratório de falhas: o serviço principal está
 com incidente aberto depois de três respostas HTTP 500 seguidas.*
