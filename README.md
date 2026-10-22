@@ -93,7 +93,7 @@ que reproduz as falhas.
 Requisitos: Docker com Compose v2 e Git.
 
 ```bash
-git clone <url-deste-repositorio> pulseops
+git clone https://github.com/Amandadamata/Pulse-Ops.git pulseops
 cd pulseops
 cp .env.example .env                 # troque POSTGRES_PASSWORD
 docker compose up -d --build --wait  # banco, migrações, API e worker
