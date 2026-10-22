@@ -150,7 +150,7 @@ O projeto usa [uv](https://docs.astral.sh/uv/) (Python 3.12).
 uv sync                                  # dependências fixadas em uv.lock
 docker run -d --name pulseops-testdb -e POSTGRES_USER=pulseops \
   -e POSTGRES_PASSWORD=pulseops -p 127.0.0.1:5433:5432 postgres:16-alpine
-uv run pytest                            # 247 testes; integração com PostgreSQL real
+uv run pytest                            # 251 testes; integração com PostgreSQL real
 uv run pytest --cov                      # cobertura (metas em docs/estrategia-de-testes.md)
 uv run ruff check . && uv run ruff format --check .
 uv run mypy                              # modo estrito

@@ -12,3 +12,4 @@ dist/
 study/build/
 docker/local-ca.pem
 .demo/
+study/node_modules

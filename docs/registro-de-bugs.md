@@ -135,11 +135,38 @@ Riscos que ainda não aconteceram ficam no [modelo de ameaças](modelo-de-ameaca
 - **Como reproduzir:** página de um monitor cujo único check falhou (captura em
   `docs/evidencias/instalacao-limpa-antes-B9.png`).
 - **Causa:** `web/charts.py` calculava mínimo e máximo sobre todos os checks,
-  inclusive falhas, enquanto as métricas (RF05.2) só usam checks com status aceito;
-  o template desenhava `<circle>` para todos os pontos.
+  inclusive falhas de conexão, enquanto as métricas (RF05) só usam checks que
+  receberam resposta HTTP; o template desenhava `<circle>` para todos os pontos.
+  (O texto original desta entrada dizia "só checks com status aceito", o que não
+  correspondia à RF05; a diferença virou o bug B10.)
 - **Correção:** o resumo do gráfico considera só respostas com status aceito e diz
-  "nenhum check com status aceito" quando não há; falhas são desenhadas como
+  "nenhum check com status aceito" quando não há (textos da época; ver B10); falhas são desenhadas como
   quadrados (forma diferente, não só cor).
 - **Teste de regressão:** `tests/unit/test_charts.py::test_failures_are_flagged_and_left_out_of_latency_summary`
-  e `::test_only_failures_say_so_instead_of_inventing_latency`.
+  e `tests/unit/test_charts.py::test_only_failures_say_so_instead_of_inventing_latency`.
+- **Limitação remanescente:** a base escolhida para o resumo não era a mesma das
+  métricas; ver B10.
+
+## B10 — Resumo do gráfico e latência média usavam bases diferentes
+
+- **Sintoma:** encontrado ao escrever a explicação linha a linha de `web/charts.py`
+  para o material de estudo. O comentário do código dizia "a latência, como nas
+  métricas, só considera checks com status aceito", mas as métricas (RF05,
+  `RESPONSE_OUTCOMES` em `services/queries.py`) incluem respostas com status fora
+  da lista (`unexpected_status`). Num monitor cujos checks só recebem HTTP 500, a
+  página mostrava uma latência média em ms nas métricas e, no gráfico, "nenhum check
+  com status aceito": a mesma contradição do B9, no sentido oposto.
+- **Como reproduzir:** `build_latency_chart` com um check `healthy` de 40 ms e um
+  `unexpected_status` de 120 ms: o resumo dizia "máxima 40 ms", enquanto a média
+  das métricas considerava os 120 ms. O teste novo falhou na versão anterior.
+- **Causa:** a correção do B9 escolheu "status aceito" como base do resumo sem
+  conferir a definição da RF05.
+- **Correção:** `web/charts.py` usa `RESPONSE_OUTCOMES` (a mesma constante das
+  métricas) para o mínimo e o máximo, e o texto passou a dizer "latência das
+  respostas HTTP". O desenho continua igual: status fora da lista é falha
+  (quadrado). A entrada do B9 foi corrigida.
+- **Teste de regressão:** `tests/unit/test_charts.py::test_latency_summary_uses_the_same_responses_as_the_metrics`.
+  Os dois testes do B9 tiveram o texto esperado atualizado para a nova frase; o que
+  eles verificam (falhas marcadas e fora do resumo, nada inventado sem dados)
+  continua igual.
 - **Limitação remanescente:** nenhuma conhecida.

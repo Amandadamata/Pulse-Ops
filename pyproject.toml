@@ -49,6 +49,8 @@ ignore = ["RUF001", "RUF002", "RUF003"]  # acentos e aspas tipográficas em text
 "lab/**" = ["S104"]
 "scripts/**" = ["S101"]
 "migrations/versions/**" = ["E501"]
+# Gerador do material de estudo: chama git, pandoc e node com argumentos fixos.
+"study/**" = ["S603", "S607"]
 
 [tool.mypy]
 python_version = "3.12"

@@ -2,11 +2,11 @@
 
 from dataclasses import dataclass
 
-from pulseops.services.queries import LatencyPoint
+from pulseops.services.queries import RESPONSE_OUTCOMES, LatencyPoint
 
 WIDTH, HEIGHT = 720, 220
 PAD_LEFT, PAD_RIGHT, PAD_TOP, PAD_BOTTOM = 56, 12, 12, 28
-ANSWERED = ("healthy", "slow")  # resultados com status aceito
+ACCEPTED = ("healthy", "slow")  # status aceito; o resto é desenhado como falha
 
 
 @dataclass(frozen=True)
@@ -50,19 +50,20 @@ def build_latency_chart(points: list[LatencyPoint], threshold_ms: int) -> Latenc
             y=y_of(p.duration_ms),
             outcome=p.outcome,
             label=f"{p.at.isoformat(timespec='seconds')} — {p.duration_ms} ms ({p.outcome})",
-            failed=p.outcome not in ANSWERED,
+            failed=p.outcome not in ACCEPTED,
         )
         for i, p in enumerate(points)
     ]
     ticks = [(y_of(top_value * f), f"{top_value * f:.0f} ms") for f in (0, 0.25, 0.5, 0.75)]
-    # A latência, como nas métricas, só considera checks com status aceito; a duração
-    # de uma falha (até o timeout, por exemplo) aparece no gráfico, mas não no resumo.
-    answered = [p.duration_ms for p in points if p.outcome in ANSWERED]
-    failures = len(points) - len(answered)
+    # Mesma base da latência média e do p95 (RF05): checks que receberam resposta HTTP,
+    # inclusive com status fora da lista. Timeout e erro de conexão ficam fora do resumo,
+    # porque a duração deles mede o prazo ou a falha, não a resposta (B9, B10).
+    responses = [p.duration_ms for p in points if p.outcome in RESPONSE_OUTCOMES]
+    failures = sum(1 for d in dots if d.failed)
     latency = (
-        f"latência mínima {min(answered)} ms, máxima {max(answered)} ms"
-        if answered
-        else "nenhum check com status aceito"
+        f"latência das respostas HTTP: mínima {min(responses)} ms, máxima {max(responses)} ms"
+        if responses
+        else "nenhuma resposta HTTP"
     )
     summary = f"{len(points)} checks ({failures} com falha); {latency}; limite {threshold_ms} ms."
     return LatencyChart(
