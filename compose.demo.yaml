@@ -1,0 +1,68 @@
+# Laboratório de falhas. Use sempre junto com compose.yaml e o perfil "demo":
+#   docker compose -f compose.yaml -f compose.demo.yaml --profile demo up -d --wait
+# (o script scripts/demo.sh faz isso e executa o roteiro).
+#
+# O que muda em relação ao ambiente padrão:
+# - API e worker rodam em modo demonstração: intervalo mínimo de 2 s e uma lista
+#   NOMINAL de destinos internos liberados (só lab-target:8081 e lab-receiver:8082).
+#   Nenhum outro endereço privado é liberado.
+# - Retentativa de webhook mais curta, para a demonstração não esperar minutos.
+# - Três serviços extras, todos no perfil "demo" e sem portas publicadas no host.
+
+x-demo-env: &demo-env
+  PULSEOPS_DEMO_MODE: "true"
+  PULSEOPS_DEMO_ALLOWED_HOSTS: lab-target:8081,lab-receiver:8082
+  PULSEOPS_WEBHOOK_BACKOFF_BASE_SECONDS: "1"
+  PULSEOPS_WEBHOOK_BACKOFF_MAX_SECONDS: "5"
+  PULSEOPS_WEBHOOK_MAX_ATTEMPTS: "20"
+
+x-lab: &lab
+  image: pulseops:local
+  profiles: [demo]
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  restart: unless-stopped
+
+services:
+  api:
+    environment: *demo-env
+
+  worker:
+    environment: *demo-env
+
+  lab-target:
+    <<: *lab
+    command: ["uvicorn", "lab.target:app", "--host", "0.0.0.0", "--port", "8081", "--no-access-log"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8081/control/state', timeout=3)"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+
+  lab-receiver:
+    <<: *lab
+    command: ["uvicorn", "lab.receiver:app", "--host", "0.0.0.0", "--port", "8082", "--no-access-log"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://127.0.0.1:8082/control/received', timeout=3)"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+
+  # Executa o roteiro (scripts/demo_flow.py) de dentro da rede do Compose, que é o
+  # único lugar de onde os controles do laboratório são alcançáveis.
+  demo-runner:
+    <<: *lab
+    command: ["python", "scripts/demo_flow.py"]
+    restart: "no"
+    environment:
+      PULSEOPS_DEMO_API: http://api:8000
+      PULSEOPS_DEMO_TARGET: http://lab-target:8081
+      PULSEOPS_DEMO_RECEIVER: http://lab-receiver:8082
+      PULSEOPS_DEMO_USERNAME: ${PULSEOPS_DEMO_USERNAME:-demo}
+      PULSEOPS_DEMO_PASSWORD: ${PULSEOPS_DEMO_PASSWORD:-}
+    depends_on:
+      api: {condition: service_healthy}
+      lab-target: {condition: service_healthy}
+      lab-receiver: {condition: service_healthy}

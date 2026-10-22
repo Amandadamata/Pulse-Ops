@@ -6,6 +6,8 @@ GET /service responde conforme o modo atual:
 - error: 500
 - timeout: espera TIMEOUT_SECONDS (mais que o timeout da demo)
 
+GET /stable responde sempre 200 (segundo monitor da demo, que nunca falha).
+
 POST /control/mode {"mode": "..."} troca o modo. Só existe dentro da rede do Compose.
 """
 
@@ -39,6 +41,11 @@ async def service() -> PlainTextResponse:
         await asyncio.sleep(TIMEOUT_SECONDS)
     elif mode == "error":
         return PlainTextResponse("erro simulado", status_code=500)
+    return PlainTextResponse("ok")
+
+
+@app.api_route("/stable", methods=["GET", "HEAD"])
+async def stable() -> PlainTextResponse:
     return PlainTextResponse("ok")
 
 

@@ -54,7 +54,7 @@ ignore = ["RUF001", "RUF002", "RUF003"]  # acentos e aspas tipográficas em text
 python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
-files = ["src/pulseops", "lab"]
+files = ["src/pulseops", "lab", "scripts"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

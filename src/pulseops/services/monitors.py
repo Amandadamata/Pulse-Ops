@@ -169,6 +169,9 @@ def _set_health(
 
 
 def _reset_counters(monitor: Monitor) -> None:
+    # Nova versão também invalida checks que já estavam em andamento: se o monitor for
+    # retomado antes de eles terminarem, o resultado fica no histórico sem efeito (B6).
+    monitor.config_version += 1
     monitor.consecutive_failures = 0
     monitor.consecutive_successes = 0
     monitor.first_failure_at = None

@@ -74,7 +74,7 @@ label { font-weight: 600; }
 .alert-error { background: var(--down-bg); color: var(--down-fg); }
 .alert-warning { background: var(--degraded-bg); color: var(--degraded-fg); }
 
-.summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: .75rem; }
+.summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: .75rem; }
 .stat { background: var(--neutral-bg); border-radius: 6px; padding: .75rem; display: flex; flex-direction: column; }
 .stat-value { font-size: 1.5rem; font-weight: 700; }
 .small-value { font-size: .95rem; }
@@ -126,6 +126,11 @@ label { font-weight: 600; }
 .chart .dot-tls_error, .chart .dot-blocked { fill: var(--down-fg); stroke: #000; stroke-width: 1; }
 
 @media (max-width: 720px) {
+  /* A tabela rola na horizontal em vez de espremer as colunas em uma palavra por linha. */
   .data-table { display: block; overflow-x: auto; }
+  .data-table td, .data-table th { min-width: 7.5rem; }
+  .data-table td:first-child { min-width: 11rem; }
+  .data-table td.reason { min-width: 16rem; }
+  .topbar { gap: .5rem 1rem; padding: .5rem 1rem; }
   main { padding: 1rem; }
 }

@@ -189,6 +189,28 @@ async def test_result_of_run_started_before_config_change_does_not_count(
     assert await incidents_of(sessions, monitor.id) == []
 
 
+async def test_result_of_run_started_before_pause_and_resume_does_not_count(
+    sessions: SessionFactory, clock: FakeClock, settings: Settings
+) -> None:
+    """Pausar e retomar enquanto um check está em andamento: o resultado dele foi
+    observado em parte com o monitor pausado e não pode contar para a nova contagem."""
+    monitor = await create_monitor(sessions, clock, failure_threshold=1)
+    target = ScriptedTarget(clock)
+    target.mode = "error"
+    [run] = await claim_due_runs(sessions, now=clock.now(), limit=10)
+    async with sessions.begin() as session:
+        await monitor_service.pause_monitor(session, monitor.id, now=clock.now())
+    async with sessions.begin() as session:
+        await monitor_service.resume_monitor(session, monitor.id, now=clock.now())
+
+    observation = await target.checker().check(run.target)
+    assert await record_result(sessions, run, observation) is True
+    after = await reload(sessions, monitor.id)
+    assert after.consecutive_failures == 0
+    assert after.health == "no_data"
+    assert await incidents_of(sessions, monitor.id) == []
+
+
 async def test_restart_with_open_incident_continues_and_records_gap(
     sessions: SessionFactory, clock: FakeClock, settings: Settings
 ) -> None:

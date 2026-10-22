@@ -162,6 +162,8 @@ Critérios:
   `recovery_threshold` e o evento `config_changed` é registrado na linha do
   tempo do incidente. Resultados de checks iniciados com uma `config_version`
   antiga são gravados mas **não alteram** contadores nem incidentes.
+  Pausar, retomar e arquivar também incrementam `config_version`, para que um
+  check em andamento durante a pausa não conte depois da retomada (bug B6).
 - **RF03.6 Início, confirmação e fim.**
   - Primeira falha observada: quando `consecutive_failures` passa de 0 para 1,
     o instante do check é guardado em `monitors.first_failure_at`.

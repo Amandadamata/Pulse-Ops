@@ -72,3 +72,19 @@ Riscos que ainda não aconteceram ficam no [modelo de ameaças](modelo-de-ameaca
   levanta `ValueError("fuso horário desconhecido: ...")`.
 - **Teste de regressão:** `tests/unit/test_config.py::test_unknown_timezone_is_rejected`.
 - **Limitação remanescente:** nenhuma conhecida.
+
+## B6 — Check em andamento durante pausa e retomada contava para a nova contagem
+
+- **Sintoma:** encontrado ao escrever o roteiro da demonstração, que pausa e retoma
+  o monitor para recomeçar do zero. Um check iniciado antes da pausa e terminado
+  depois da retomada ainda somava falhas.
+- **Como reproduzir:** reservar a execução, pausar, retomar e só então gravar um
+  resultado de erro com `failure_threshold=1`: o monitor ficava com
+  `consecutive_failures == 1` (o teste novo falhou com `assert 1 == 0`).
+- **Causa:** `record_result` descartava o efeito apenas se o monitor não estivesse
+  ativo ou se a `config_version` tivesse mudado; pausar e retomar não mudava a versão.
+- **Correção:** `_reset_counters` em `services/monitors.py` (usado por pausar,
+  retomar e arquivar) incrementa `config_version`.
+- **Teste de regressão:** `tests/integration/test_incident_lifecycle.py::test_result_of_run_started_before_pause_and_resume_does_not_count`.
+- **Limitação remanescente:** o nome `config_version` agora significa "versão da
+  contagem", não só da configuração; está documentado em RF03.5.
