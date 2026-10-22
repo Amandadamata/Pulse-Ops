@@ -124,3 +124,22 @@ Riscos que ainda não aconteceram ficam no [modelo de ameaças](modelo-de-ameaca
 - **Teste de regressão:** o teste citado acima, mais o ensaio repetido
   (`docs/evidencias/ensaio-de-carga.md`: mediana de 0,64 s e 99,5% dos checks).
 - **Limitação remanescente:** granularidade de 1 s do tick; documentada em `operacao.md`.
+
+## B9 — Legenda do gráfico contradizia o desenho e as métricas
+
+- **Sintoma:** na instalação limpa (monitor apontando para `https://example.com/`,
+  sem DNS no ambiente), a página do monitor mostrava "latência média: N/A" nas
+  métricas e, logo abaixo, "latência mínima 35 ms, máxima 35 ms" na legenda do
+  gráfico. A legenda também dizia "pontos quadrados indicam falha", mas todos os
+  pontos eram círculos (só a cor mudava).
+- **Como reproduzir:** página de um monitor cujo único check falhou (captura em
+  `docs/evidencias/instalacao-limpa-antes-B9.png`).
+- **Causa:** `web/charts.py` calculava mínimo e máximo sobre todos os checks,
+  inclusive falhas, enquanto as métricas (RF05.2) só usam checks com status aceito;
+  o template desenhava `<circle>` para todos os pontos.
+- **Correção:** o resumo do gráfico considera só respostas com status aceito e diz
+  "nenhum check com status aceito" quando não há; falhas são desenhadas como
+  quadrados (forma diferente, não só cor).
+- **Teste de regressão:** `tests/unit/test_charts.py::test_failures_are_flagged_and_left_out_of_latency_summary`
+  e `::test_only_failures_say_so_instead_of_inventing_latency`.
+- **Limitação remanescente:** nenhuma conhecida.

@@ -6,6 +6,7 @@ from pulseops.services.queries import LatencyPoint
 
 WIDTH, HEIGHT = 720, 220
 PAD_LEFT, PAD_RIGHT, PAD_TOP, PAD_BOTTOM = 56, 12, 12, 28
+ANSWERED = ("healthy", "slow")  # resultados com status aceito
 
 
 @dataclass(frozen=True)
@@ -14,6 +15,7 @@ class ChartDot:
     y: float
     outcome: str
     label: str
+    failed: bool
 
 
 @dataclass(frozen=True)
@@ -48,16 +50,21 @@ def build_latency_chart(points: list[LatencyPoint], threshold_ms: int) -> Latenc
             y=y_of(p.duration_ms),
             outcome=p.outcome,
             label=f"{p.at.isoformat(timespec='seconds')} — {p.duration_ms} ms ({p.outcome})",
+            failed=p.outcome not in ANSWERED,
         )
         for i, p in enumerate(points)
     ]
     ticks = [(y_of(top_value * f), f"{top_value * f:.0f} ms") for f in (0, 0.25, 0.5, 0.75)]
-    failures = sum(1 for p in points if p.outcome not in ("healthy", "slow"))
-    summary = (
-        f"{len(points)} checks; latência mínima {min(p.duration_ms for p in points)} ms, "
-        f"máxima {max(p.duration_ms for p in points)} ms; limite {threshold_ms} ms; "
-        f"{failures} com falha."
+    # A latência, como nas métricas, só considera checks com status aceito; a duração
+    # de uma falha (até o timeout, por exemplo) aparece no gráfico, mas não no resumo.
+    answered = [p.duration_ms for p in points if p.outcome in ANSWERED]
+    failures = len(points) - len(answered)
+    latency = (
+        f"latência mínima {min(answered)} ms, máxima {max(answered)} ms"
+        if answered
+        else "nenhum check com status aceito"
     )
+    summary = f"{len(points)} checks ({failures} com falha); {latency}; limite {threshold_ms} ms."
     return LatencyChart(
         width=WIDTH,
         height=HEIGHT,
