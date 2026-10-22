@@ -5,7 +5,7 @@ from datetime import timedelta
 
 import httpx
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -270,3 +270,32 @@ async def test_scheduled_time_and_observed_time_are_both_recorded(
     assert check.scheduled_at == created_at
     assert check.started_at - check.scheduled_at == timedelta(seconds=1.5)
     assert check.run_key == f"{monitor.id}:{created_at.isoformat(timespec='milliseconds')}"
+
+
+async def test_dispatcher_refills_freed_slots_without_waiting_a_tick(
+    sessions: SessionFactory, clock: FakeClock, settings: Settings
+) -> None:
+    """B8: com mais checks vencidos que vagas, o laço não dorme o tick inteiro entre lotes.
+
+    Com 2 vagas, 6 monitores vencidos e tick de 2 s, o comportamento antigo levava pelo
+    menos 4 s (um lote por tick); o atual termina assim que as vagas se liberam.
+    """
+    for n in range(6):
+        await create_monitor(sessions, clock, name=f"fila {n}")
+    tight = settings.model_copy(update={"worker_concurrency": 2, "worker_tick_seconds": 2.0})
+    worker = make_worker(sessions, clock, ScriptedTarget(clock), tight)
+    stop = asyncio.Event()
+    running = asyncio.create_task(worker.run(stop))
+    try:
+        async with asyncio.timeout(1.5):
+            while True:
+                async with sessions() as session:
+                    done = await session.scalar(
+                        select(func.count()).select_from(Check).where(Check.status == "completed")
+                    )
+                if done == 6:
+                    break
+                await asyncio.sleep(0.05)
+    finally:
+        stop.set()
+        await running

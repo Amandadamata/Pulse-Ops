@@ -105,3 +105,22 @@ Riscos que ainda não aconteceram ficam no [modelo de ameaças](modelo-de-ameaca
 - **Teste de regressão:** `tests/integration/test_dashboard.py::test_destination_form_validates_and_toggles`.
 - **Limitação remanescente:** nenhuma conhecida. Outras rotas que fazem rollback não
   leem objetos do ORM depois dele.
+
+## B8 — Worker atrasava os checks quando havia mais checks vencidos que vagas
+
+- **Sintoma:** no ensaio de carga (200 monitores a cada 10 s, concorrência 20), o
+  atraso entre o horário previsto e o início do check teve mediana de 7,8 s e p95 de
+  9,7 s, e só 93% dos checks esperados foram feitos
+  (`docs/evidencias/ensaio-de-carga-antes-B8.md`).
+- **Como reproduzir:** `tests/integration/test_consistency.py::test_dispatcher_refills_freed_slots_without_waiting_a_tick`
+  (2 vagas, 6 monitores vencidos, tick de 2 s) falha na versão anterior por tempo esgotado.
+- **Causa:** o laço de checks reservava no máximo `worker_concurrency` execuções e
+  dormia o tick inteiro (1 s) mesmo quando todas as vagas tinham sido preenchidas e
+  ainda havia fila. A vazão ficava limitada a cerca de 20 checks por segundo, embora
+  cada check levasse uns 40 ms.
+- **Correção:** `worker/runner.py`: quando a reserva preenche todas as vagas pedidas,
+  o laço espera só até uma vaga abrir (evento sinalizado ao fim de cada check), com
+  o tick como limite. Sem fila, continua esperando o tick.
+- **Teste de regressão:** o teste citado acima, mais o ensaio repetido
+  (`docs/evidencias/ensaio-de-carga.md`: mediana de 0,64 s e 99,5% dos checks).
+- **Limitação remanescente:** granularidade de 1 s do tick; documentada em `operacao.md`.

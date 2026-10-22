@@ -49,6 +49,8 @@ class Worker:
         self.worker_id = worker_id or f"{socket.gethostname()}:{os.getpid()}"
         self._started_at = clock.now()
         self._inflight: set[asyncio.Task[None]] = set()
+        # Sinalizado sempre que um check termina e libera uma vaga (ver _wait_after_dispatch).
+        self._slot_freed = asyncio.Event()
         self._last_retention = self._started_at - RETENTION_EVERY
 
     # ---- verificações -------------------------------------------------------------
@@ -59,13 +61,33 @@ class Worker:
         O número de tarefas em andamento nunca passa de `worker_concurrency`: esse é o
         limite de concorrência das verificações.
         """
+        claimed, _ = await self._dispatch()
+        return claimed
+
+    async def _dispatch(self) -> tuple[int, int]:
+        """Devolve (reservadas, vagas pedidas)."""
         free = self._settings.worker_concurrency - len(self._inflight)
         runs = await processing.claim_due_runs(self._sessions, now=self._clock.now(), limit=free)
         for run in runs:
             task = asyncio.create_task(self._run_one(run), name=f"check:{run.run_key}")
             self._inflight.add(task)
-            task.add_done_callback(self._inflight.discard)
-        return len(runs)
+            task.add_done_callback(self._release_slot)
+        return len(runs), free
+
+    def _release_slot(self, task: asyncio.Task[None]) -> None:
+        self._inflight.discard(task)
+        self._slot_freed.set()
+
+    async def _wait_after_dispatch(self, claimed: int, requested: int) -> None:
+        """Se todas as vagas pedidas foram preenchidas, pode haver fila: volta assim que
+        uma vaga abrir, em vez de dormir o tick inteiro (bug B8). Se vieram menos
+        execuções que vagas, nada mais está vencido e o tick normal basta."""
+        tick = self._settings.worker_tick_seconds
+        if claimed < requested:
+            await asyncio.sleep(tick)
+            return
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(self._slot_freed.wait(), timeout=tick)
 
     async def wait_inflight(self) -> None:
         if self._inflight:
@@ -171,7 +193,7 @@ class Worker:
         s = self._settings
         logger.info("worker iniciado", extra={"worker_id": self.worker_id})
         loops = [
-            self._loop("checks", self.dispatch_checks, s.worker_tick_seconds, stop),
+            self._check_loop(stop),
             self._loop("deliveries", self.run_deliveries_once, s.worker_tick_seconds, stop),
             self._loop(
                 "maintenance", self.run_maintenance_once, s.heartbeat_interval_seconds, stop
@@ -180,6 +202,28 @@ class Worker:
         await asyncio.gather(*loops)
         logger.info("aguardando checks em andamento terminarem")
         await self.wait_inflight()
+
+    async def _check_loop(self, stop: asyncio.Event) -> None:
+        failures = 0
+        while not stop.is_set():
+            self._slot_freed.clear()
+            try:
+                claimed, requested = await self._dispatch()
+                failures = 0
+            except Exception:
+                failures += 1
+                delay = min(self._settings.worker_tick_seconds * 2**failures, 30.0)
+                logger.exception(
+                    "erro no laço do worker", extra={"loop": "checks", "retry_in": delay}
+                )
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(stop.wait(), timeout=delay)
+                continue
+            waiter = asyncio.create_task(self._wait_after_dispatch(claimed, requested))
+            stopper = asyncio.create_task(stop.wait())
+            await asyncio.wait({waiter, stopper}, return_when=asyncio.FIRST_COMPLETED)
+            waiter.cancel()
+            stopper.cancel()
 
     async def _loop(
         self, name: str, step: Callable[[], Awaitable[object]], every: float, stop: asyncio.Event
