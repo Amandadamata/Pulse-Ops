@@ -93,7 +93,9 @@ e o script termina com código diferente de zero se algo não se confirmar:
 4. Um timeout: "Falha 1 de 3", ainda sem incidente.
 5. Erros HTTP 500: o incidente abre na 3ª falha seguida, com o motivo registrado.
 6. Mais falhas não abrem outro incidente.
-7. Alvo restaurado: o primeiro sucesso ainda não encerra.
+7. Alvo restaurado: o primeiro sucesso ainda não encerra (o roteiro mostra isso
+   quando consegue observar esse momento; a regra é verificada em
+   `tests/unit/test_health.py`).
 8. O segundo sucesso encerra o incidente e o alerta de recuperação chega.
 9. Receptor fora do ar (503) e novo incidente: a entrega fica pendente.
 10. Os checks continuam sendo gravados enquanto o alerta espera.
