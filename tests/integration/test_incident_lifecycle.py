@@ -60,7 +60,9 @@ async def test_threshold_example_with_database(
     async with sessions() as session:
         kinds = list(await session.scalars(select(AlertEvent.kind).order_by(AlertEvent.id)))
         timeline = list(
-            await session.scalars(select(IncidentEvent.kind).order_by(IncidentEvent.occurred_at, IncidentEvent.id))
+            await session.scalars(
+                select(IncidentEvent.kind).order_by(IncidentEvent.occurred_at, IncidentEvent.id)
+            )
         )
     assert kinds == ["incident.opened", "incident.resolved"]  # nada a cada falha repetida
     assert timeline == ["first_failure", "opened", "resolved"]
@@ -93,7 +95,11 @@ async def test_error_type_change_is_recorded_on_timeline(
     incident = (await incidents_of(sessions, monitor.id))[0]
     assert incident.last_outcome == "connection_error"
     async with sessions() as session:
-        kinds = list(await session.scalars(select(IncidentEvent.kind).where(IncidentEvent.incident_id == incident.id)))
+        kinds = list(
+            await session.scalars(
+                select(IncidentEvent.kind).where(IncidentEvent.incident_id == incident.id)
+            )
+        )
     assert "error_changed" in kinds
 
 
@@ -159,7 +165,11 @@ async def test_config_change_resets_counters_and_keeps_incident(
     assert (await incidents_of(sessions, monitor.id))[0].status == "resolved"
 
     async with sessions() as session:
-        kinds = list(await session.scalars(select(IncidentEvent.kind).where(IncidentEvent.incident_id == incident.id)))
+        kinds = list(
+            await session.scalars(
+                select(IncidentEvent.kind).where(IncidentEvent.incident_id == incident.id)
+            )
+        )
     assert "config_changed" in kinds
 
 
@@ -206,7 +216,7 @@ async def test_restart_with_open_incident_continues_and_records_gap(
 async def test_every_health_change_is_explained(
     sessions: SessionFactory, clock: FakeClock, settings: Settings
 ) -> None:
-    monitor = await create_monitor(sessions, clock, failure_threshold=1, recovery_threshold=1)
+    await create_monitor(sessions, clock, failure_threshold=1, recovery_threshold=1)
     target = ScriptedTarget(clock)
     worker = make_worker(sessions, clock, target, settings)
     for mode in ["ok", "slow", "error", "ok"]:
@@ -215,6 +225,9 @@ async def test_every_health_change_is_explained(
     async with sessions() as session:
         changes = list(await session.scalars(select(HealthChange).order_by(HealthChange.id)))
     assert [(c.from_health, c.to_health) for c in changes] == [
-        ("no_data", "healthy"), ("healthy", "degraded"), ("degraded", "down"), ("down", "healthy"),
+        ("no_data", "healthy"),
+        ("healthy", "degraded"),
+        ("degraded", "down"),
+        ("down", "healthy"),
     ]
     assert all(c.reason and c.check_id for c in changes)

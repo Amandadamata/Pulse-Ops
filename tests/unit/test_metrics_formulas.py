@@ -43,7 +43,9 @@ def test_incident_crossing_window_is_clipped() -> None:
 def test_open_incident_counts_until_now() -> None:
     start, end = START, START + timedelta(hours=1)
     now = START + timedelta(minutes=20)
-    assert clipped_duration(start, end, START + timedelta(minutes=5), None, now) == timedelta(minutes=15)
+    assert clipped_duration(start, end, START + timedelta(minutes=5), None, now) == timedelta(
+        minutes=15
+    )
 
 
 def test_incident_outside_window_is_zero() -> None:

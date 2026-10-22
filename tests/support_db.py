@@ -1,9 +1,10 @@
 """Atalhos para os testes de integração: criar monitores e rodar o worker."""
 
 from dataclasses import replace
+from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, insert, select
 
 from pulseops.config import Settings
 from pulseops.db.models import Check, Incident, Monitor
@@ -95,7 +96,9 @@ async def count_checks(sessions: SessionFactory, monitor_id: int, **filters: Any
         return int(await session.scalar(query) or 0)
 
 
-async def update_monitor(sessions: SessionFactory, clock: FakeClock, monitor_id: int, **changes: Any) -> Monitor:
+async def update_monitor(
+    sessions: SessionFactory, clock: FakeClock, monitor_id: int, **changes: Any
+) -> Monitor:
     async with sessions.begin() as session:
         current = monitors.config_of(await monitors.get_monitor(session, monitor_id))
         return await monitors.update_monitor(
@@ -107,3 +110,33 @@ async def update_monitor(sessions: SessionFactory, clock: FakeClock, monitor_id:
             min_interval_seconds=2,
             resolver=FakeResolver(),
         )
+
+
+async def insert_checks(
+    sessions: SessionFactory,
+    monitor_id: int,
+    rows: list[tuple[str, int]],
+    *,
+    start: datetime,
+    step: float = 1,
+) -> None:
+    """Grava checks concluídos em horários exatos (start, start+step, ...)."""
+    async with sessions.begin() as session:
+        for i, (outcome, ms) in enumerate(rows):
+            at = start + timedelta(seconds=i * step)
+            await session.execute(
+                insert(Check).values(
+                    monitor_id=monitor_id,
+                    run_key=f"{monitor_id}:{i}",
+                    trigger="scheduled",
+                    status="completed",
+                    config_version=1,
+                    scheduled_at=at,
+                    started_at=at,
+                    finished_at=at,
+                    duration_ms=ms,
+                    status_code=200 if outcome in ("healthy", "slow") else None,
+                    outcome=outcome,
+                    explanation="x",
+                )
+            )

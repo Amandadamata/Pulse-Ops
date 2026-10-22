@@ -10,7 +10,9 @@ def test_ranges_and_single_codes() -> None:
     assert str(accepted) == "200-299,301"
 
 
-@pytest.mark.parametrize("spec", ["", "abc", "299-200", "99", "600", "200-", "-200", "200,,201", "1" * 101])
+@pytest.mark.parametrize(
+    "spec", ["", "abc", "299-200", "99", "600", "200-", "-200", "200,,201", "1" * 101]
+)
 def test_invalid_specs_are_rejected(spec: str) -> None:
     with pytest.raises(ValueError):
         parse_status_codes(spec)

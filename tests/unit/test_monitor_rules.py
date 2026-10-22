@@ -42,7 +42,9 @@ def test_timeout_must_be_smaller_than_interval() -> None:
 
 
 def test_latency_threshold_cannot_exceed_timeout() -> None:
-    assert "latency_threshold_ms" in fields(replace(VALID, timeout_seconds=2, latency_threshold_ms=2001))
+    assert "latency_threshold_ms" in fields(
+        replace(VALID, timeout_seconds=2, latency_threshold_ms=2001)
+    )
     assert fields(replace(VALID, timeout_seconds=2, latency_threshold_ms=2000)) == set()
 
 

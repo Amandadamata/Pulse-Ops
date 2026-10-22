@@ -18,7 +18,9 @@ from tests.support import START
 INITIAL = TrackerState(Health.NO_DATA, 0, 0, None, incident_open=False)
 
 
-def run(outcomes: list[Outcome], failure: int = 3, recovery: int = 2, state: TrackerState = INITIAL):
+def run(
+    outcomes: list[Outcome], failure: int = 3, recovery: int = 2, state: TrackerState = INITIAL
+):
     tracker = HealthTracker(Thresholds(failure, recovery))
     decisions = []
     for i, outcome in enumerate(outcomes):
@@ -69,7 +71,7 @@ def test_alternating_results_never_reach_threshold() -> None:
 
 
 def test_failure_during_recovery_resets_success_counter() -> None:
-    state, decisions = run([F, F, F, S, F, S, S], recovery=2)
+    _, decisions = run([F, F, F, S, F, S, S], recovery=2)
     assert actions(decisions)[-1] is IncidentAction.RESOLVE
     assert actions(decisions)[4] is IncidentAction.UPDATE
 
@@ -102,7 +104,13 @@ def test_internal_error_changes_nothing() -> None:
 
 @pytest.mark.parametrize(
     "outcome",
-    [Outcome.UNEXPECTED_STATUS, Outcome.TIMEOUT, Outcome.CONNECTION_ERROR, Outcome.TLS_ERROR, Outcome.BLOCKED],
+    [
+        Outcome.UNEXPECTED_STATUS,
+        Outcome.TIMEOUT,
+        Outcome.CONNECTION_ERROR,
+        Outcome.TLS_ERROR,
+        Outcome.BLOCKED,
+    ],
 )
 def test_every_target_failure_category_counts(outcome: Outcome) -> None:
     state, _ = run([outcome], failure=1)

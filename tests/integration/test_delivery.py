@@ -9,7 +9,14 @@ import pytest
 from sqlalchemy import select
 
 from pulseops.config import Settings
-from pulseops.db.models import AlertDestination, AlertEvent, Check, Delivery, DeliveryAttempt, Incident
+from pulseops.db.models import (
+    AlertDestination,
+    AlertEvent,
+    Check,
+    Delivery,
+    DeliveryAttempt,
+    Incident,
+)
 from pulseops.db.session import SessionFactory
 from pulseops.notifications.webhook import WebhookNotifier
 from pulseops.security.url_policy import DestinationPolicy
@@ -24,11 +31,15 @@ HOOK = "https://hooks.example.com/pulseops"
 async def add_destination(sessions: SessionFactory, clock: FakeClock, url: str = HOOK) -> None:
     async with sessions.begin() as session:
         session.add(
-            AlertDestination(name="equipe", url=url, enabled=True, created_at=clock.now(), updated_at=clock.now())
+            AlertDestination(
+                name="equipe", url=url, enabled=True, created_at=clock.now(), updated_at=clock.now()
+            )
         )
 
 
-async def open_incident(sessions: SessionFactory, clock: FakeClock, settings: Settings, notifier: Any) -> Any:
+async def open_incident(
+    sessions: SessionFactory, clock: FakeClock, settings: Settings, notifier: Any
+) -> Any:
     await create_monitor(sessions, clock, failure_threshold=1)
     target = ScriptedTarget(clock)
     target.mode = "error"
@@ -100,14 +111,29 @@ async def test_retries_with_capped_exponential_backoff(
     await worker.run_deliveries_once()
     [d] = await deliveries(sessions)
     assert (d.status, d.attempt_count) == ("delivered", 3)
-    assert [a.result for a in await attempts(sessions)] == ["retryable_error", "retryable_error", "success"]
+    assert [a.result for a in await attempts(sessions)] == [
+        "retryable_error",
+        "retryable_error",
+        "success",
+    ]
 
 
 def test_backoff_is_capped() -> None:
-    assert [alerts.backoff_delay(n, 5, 300) for n in range(1, 9)] == [5, 10, 20, 40, 80, 160, 300, 300]
+    assert [alerts.backoff_delay(n, 5, 300) for n in range(1, 9)] == [
+        5,
+        10,
+        20,
+        40,
+        80,
+        160,
+        300,
+        300,
+    ]
 
 
-@pytest.mark.parametrize(("status", "permanent"), [(400, True), (404, True), (408, False), (429, False), (500, False)])
+@pytest.mark.parametrize(
+    ("status", "permanent"), [(400, True), (404, True), (408, False), (429, False), (500, False)]
+)
 def test_permanent_status_classification(status: int, permanent: bool) -> None:
     assert alerts.is_permanent_status(status) is permanent
 
@@ -147,11 +173,18 @@ async def test_expired_lease_is_retried_which_may_duplicate(
     a reserva expira e o mesmo evento é enviado de novo (RF06.8)."""
     await add_destination(sessions, clock)
     await open_incident(sessions, clock, settings, RecordingNotifier())
-    [first] = await alerts.claim_due_deliveries(sessions, now=clock.now(), limit=10, lease_seconds=35)
+    [first] = await alerts.claim_due_deliveries(
+        sessions, now=clock.now(), limit=10, lease_seconds=35
+    )
     # ... o processo morreu aqui, sem gravar o resultado.
-    assert await alerts.claim_due_deliveries(sessions, now=clock.now(), limit=10, lease_seconds=35) == []
+    assert (
+        await alerts.claim_due_deliveries(sessions, now=clock.now(), limit=10, lease_seconds=35)
+        == []
+    )
     clock.advance(36)
-    [second] = await alerts.claim_due_deliveries(sessions, now=clock.now(), limit=10, lease_seconds=35)
+    [second] = await alerts.claim_due_deliveries(
+        sessions, now=clock.now(), limit=10, lease_seconds=35
+    )
     assert second.event_key == first.event_key  # mesma identidade: o receptor deduplica
     assert second.attempt_number == 2
 
@@ -247,7 +280,9 @@ async def test_blocked_destination_fails_permanently(
     """T8: um destino que aponta para a rede interna nunca é chamado."""
     await add_destination(sessions, clock, url="http://10.0.0.5/hook")
     called: list[httpx.Request] = []
-    client = httpx.AsyncClient(transport=httpx.MockTransport(lambda r: called.append(r) or httpx.Response(200)))
+    client = httpx.AsyncClient(
+        transport=httpx.MockTransport(lambda r: called.append(r) or httpx.Response(200))
+    )
     notifier = WebhookNotifier(client, clock, DestinationPolicy(), timeout_seconds=1)
     worker, _ = await open_incident(sessions, clock, settings, notifier)
     await worker.run_deliveries_once()

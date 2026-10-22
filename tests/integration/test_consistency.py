@@ -44,13 +44,15 @@ async def test_reprocessed_result_is_ignored(sessions: SessionFactory, clock: Fa
     assert (await reload(sessions, monitor.id)).consecutive_failures == 1
 
 
-async def test_same_run_identity_cannot_be_reserved_twice(sessions: SessionFactory, clock: FakeClock) -> None:
+async def test_same_run_identity_cannot_be_reserved_twice(
+    sessions: SessionFactory, clock: FakeClock
+) -> None:
     monitor = await create_monitor(sessions, clock)
     target = ScriptedTarget(clock)
     [run] = await processing.claim_due_runs(sessions, now=clock.now(), limit=5)
     await processing.record_result(sessions, run, await target.checker().check(run.target))
 
-    # Simula o agendador voltando para o mesmo horário previsto (por exemplo, após restaurar backup).
+    # Simula o agendador voltando ao mesmo horário previsto (por exemplo, após restaurar backup).
     async with sessions.begin() as session:
         stored = await session.get(Check, run.check_id)
         assert stored is not None
@@ -61,7 +63,7 @@ async def test_same_run_identity_cannot_be_reserved_twice(sessions: SessionFacto
 
 
 async def test_overlapping_check_is_not_started(sessions: SessionFactory, clock: FakeClock) -> None:
-    """Cenário 10: com um check em andamento, nem o agendador nem "verificar agora" iniciam outro."""
+    """Cenário 10: com um check em andamento, nem agendador nem "verificar agora" iniciam outro."""
     monitor = await create_monitor(sessions, clock)
     [run] = await processing.claim_due_runs(sessions, now=clock.now(), limit=5)
 
@@ -79,15 +81,22 @@ async def test_overlapping_check_is_not_started(sessions: SessionFactory, clock:
         assert stored is not None and stored.trigger == "manual"
 
 
-async def test_database_rejects_second_running_check(sessions: SessionFactory, clock: FakeClock) -> None:
+async def test_database_rejects_second_running_check(
+    sessions: SessionFactory, clock: FakeClock
+) -> None:
     monitor = await create_monitor(sessions, clock)
     await processing.claim_due_runs(sessions, now=clock.now(), limit=5)
     with pytest.raises(IntegrityError, match="uq_checks_one_running_per_monitor"):
         async with sessions.begin() as session:
             session.add(
                 Check(
-                    monitor_id=monitor.id, run_key="manual-duplicate", trigger="manual", status="running",
-                    config_version=1, scheduled_at=clock.now(), started_at=clock.now(),
+                    monitor_id=monitor.id,
+                    run_key="manual-duplicate",
+                    trigger="manual",
+                    status="running",
+                    config_version=1,
+                    scheduled_at=clock.now(),
+                    started_at=clock.now(),
                 )
             )
 
@@ -104,15 +113,25 @@ async def test_database_rejects_second_open_incident(
         async with sessions.begin() as session:
             session.add(
                 Incident(
-                    monitor_id=monitor.id, status="open", started_at=existing.started_at,
-                    confirmed_at=existing.confirmed_at, failure_threshold=1, recovery_threshold=1,
-                    timeout_seconds=5, latency_threshold_ms=1000, opening_reason="duplicado",
-                    failure_count=1, last_outcome="timeout", last_explanation="x",
+                    monitor_id=monitor.id,
+                    status="open",
+                    started_at=existing.started_at,
+                    confirmed_at=existing.confirmed_at,
+                    failure_threshold=1,
+                    recovery_threshold=1,
+                    timeout_seconds=5,
+                    latency_threshold_ms=1000,
+                    opening_reason="duplicado",
+                    failure_count=1,
+                    last_outcome="timeout",
+                    last_explanation="x",
                 )
             )
 
 
-async def test_concurrent_claims_never_take_the_same_monitor(sessions: SessionFactory, clock: FakeClock) -> None:
+async def test_concurrent_claims_never_take_the_same_monitor(
+    sessions: SessionFactory, clock: FakeClock
+) -> None:
     for i in range(10):
         await create_monitor(sessions, clock, name=f"monitor {i}")
     results = await asyncio.gather(
@@ -167,13 +186,20 @@ async def test_database_failure_while_recording_does_not_count_as_target_failure
     assert len(await incidents_of(sessions, monitor.id)) == 1
 
 
-async def test_worker_loop_survives_unreachable_database(settings: Settings, clock: FakeClock) -> None:
+async def test_worker_loop_survives_unreachable_database(
+    settings: Settings, clock: FakeClock
+) -> None:
     """Cenário 15: com o banco fora do ar, os laços registram o erro e continuam vivos."""
     dead = create_engine("postgresql+psycopg://pulseops:x@127.0.0.1:1/nada", pool_size=1)
-    fast = settings.model_copy(update={"worker_tick_seconds": 0.01, "heartbeat_interval_seconds": 0.01})
+    fast = settings.model_copy(
+        update={"worker_tick_seconds": 0.01, "heartbeat_interval_seconds": 0.01}
+    )
     worker = Worker(
-        sessions=create_session_factory(dead), checker=ScriptedTarget(clock).checker(),
-        notifier=RecordingNotifier(), clock=clock, settings=fast,
+        sessions=create_session_factory(dead),
+        checker=ScriptedTarget(clock).checker(),
+        notifier=RecordingNotifier(),
+        clock=clock,
+        settings=fast,
     )
     stop = asyncio.Event()
     task = asyncio.create_task(worker.run(stop))

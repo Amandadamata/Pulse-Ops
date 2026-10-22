@@ -46,3 +46,29 @@ Riscos que ainda não aconteceram ficam no [modelo de ameaças](modelo-de-ameaca
 - **Teste de regressão:** `tests/integration/test_dashboard.py::test_monitor_name_is_escaped`
   confirma que o autoescape está ligado.
 - **Limitação remanescente:** nenhuma conhecida.
+
+## B4 — `verify_password` levantava exceção com hash corrompido contendo acentos
+
+- **Sintoma:** `tests/unit/test_passwords.py::test_missing_user_never_verifies`
+  falhou com `UnicodeEncodeError: 'ascii' codec can't encode character`.
+- **Como reproduzir:** `verify_password("não é um hash", "x")` na versão anterior.
+- **Causa:** o argon2-cffi codifica o hash em ASCII antes de interpretá-lo; um
+  texto com acentos falha nessa etapa, antes de chegar a `InvalidHashError`, que
+  era a única exceção de formato tratada.
+- **Correção:** `security/passwords.py` também trata `ValueError` (da qual
+  `UnicodeEncodeError` herda) como "senha não confere". Um hash corrompido no banco
+  nunca derruba o login com erro 500.
+- **Teste de regressão:** `tests/unit/test_passwords.py::test_missing_user_never_verifies`.
+- **Limitação remanescente:** nenhuma conhecida.
+
+## B5 — Fuso horário inexistente não virava erro de configuração legível
+
+- **Sintoma:** `tests/unit/test_config.py::test_unknown_timezone_is_rejected`
+  esperava `ValidationError` e recebeu `ZoneInfoNotFoundError`.
+- **Como reproduzir:** `Settings(display_timezone="Marte/Olympus")` na versão anterior.
+- **Causa:** `ZoneInfoNotFoundError` herda de `KeyError`; o Pydantic só converte
+  `ValueError` e `AssertionError` levantados em validadores.
+- **Correção:** o validador `_known_timezone` em `config.py` captura o erro e
+  levanta `ValueError("fuso horário desconhecido: ...")`.
+- **Teste de regressão:** `tests/unit/test_config.py::test_unknown_timezone_is_rejected`.
+- **Limitação remanescente:** nenhuma conhecida.

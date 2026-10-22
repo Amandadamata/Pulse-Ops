@@ -1,7 +1,7 @@
 """Configuração lida de variáveis de ambiente com prefixo PULSEOPS_."""
 
 from functools import cached_property
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -37,7 +37,12 @@ class Settings(BaseSettings):
     @field_validator("display_timezone")
     @classmethod
     def _known_timezone(cls, value: str) -> str:
-        ZoneInfo(value)  # levanta erro se o fuso não existir
+        # ZoneInfoNotFoundError herda de KeyError, que o Pydantic não converte em erro de
+        # validação; por isso a conversão explícita para ValueError.
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError(f"fuso horário desconhecido: {value}") from exc
         return value
 
     @cached_property

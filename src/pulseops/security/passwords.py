@@ -20,5 +20,7 @@ def hash_password(password: str) -> str:
 def verify_password(password_hash: str | None, password: str) -> bool:
     try:
         return _hasher.verify(password_hash or _DUMMY_HASH, password) and password_hash is not None
-    except (VerificationError, InvalidHashError):
+    except (VerificationError, InvalidHashError, ValueError):
+        # Um hash corrompido no banco (por exemplo, texto com acentos) levanta
+        # UnicodeEncodeError, subclasse de ValueError: tratamos como senha inválida.
         return False
