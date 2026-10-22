@@ -66,3 +66,10 @@ addopts = "-ra --strict-markers"
 [tool.coverage.run]
 source = ["pulseops"]
 branch = true
+# O SQLAlchemy assíncrono executa partes do código dentro de greenlets; sem isto,
+# linhas executadas aparecem como não cobertas.
+concurrency = ["greenlet", "thread"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false

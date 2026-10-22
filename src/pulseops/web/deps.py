@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from pulseops.clock import Clock
 from pulseops.config import Settings
-from pulseops.db.models import Operator, OperatorSession
 from pulseops.db.session import SessionFactory
 from pulseops.security.transport import Resolver
 from pulseops.security.url_policy import DestinationPolicy
@@ -50,12 +49,16 @@ Db = Annotated[AsyncSession, Depends(get_db)]
 
 @dataclass(frozen=True)
 class AuthContext:
-    operator: Operator
-    session: OperatorSession
+    """Valores copiados da sessão no início da requisição.
 
-    @property
-    def csrf_token(self) -> str:
-        return self.session.csrf_token
+    Não guarda objetos do ORM: se a rota desfizer a transação (rollback), objetos
+    carregados expiram e lê-los de novo no template exigiria I/O fora de contexto
+    assíncrono (bug B7).
+    """
+
+    operator_id: int
+    username: str
+    csrf_token: str
 
 
 async def current_auth(request: Request, db: Db, state: State) -> AuthContext | None:
@@ -63,7 +66,12 @@ async def current_auth(request: Request, db: Db, state: State) -> AuthContext | 
     if not token:
         return None
     loaded = await auth.load_session(db, token, now=state.clock.now())
-    return AuthContext(operator=loaded[1], session=loaded[0]) if loaded else None
+    if loaded is None:
+        return None
+    operator_session, operator = loaded
+    return AuthContext(
+        operator_id=operator.id, username=operator.username, csrf_token=operator_session.csrf_token
+    )
 
 
 MaybeAuth = Annotated[AuthContext | None, Depends(current_auth)]

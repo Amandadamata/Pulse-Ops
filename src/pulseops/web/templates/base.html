@@ -16,7 +16,7 @@
   {% endif %}
   <header class="topbar">
     <a class="brand" href="/">PulseOps</a>
-    {% if operator %}
+    {% if username %}
     <nav aria-label="Principal">
       <ul>
         <li><a href="/">Monitores</a></li>
@@ -26,7 +26,7 @@
     </nav>
     <form method="post" action="/logout" class="logout">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <span class="muted">{{ operator.username }}</span>
+      <span class="muted">{{ username }}</span>
       <button type="submit" class="link-button">Sair</button>
     </form>
     {% endif %}

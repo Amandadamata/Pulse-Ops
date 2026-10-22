@@ -50,7 +50,7 @@ def render(
         "tz": state.settings.timezone,
         "tz_name": state.settings.display_timezone,
         "demo_mode": state.settings.demo_mode,
-        "operator": ctx.operator if ctx else None,
+        "username": ctx.username if ctx else None,
         "csrf_token": ctx.csrf_token if ctx else None,
     }
     return templates.TemplateResponse(

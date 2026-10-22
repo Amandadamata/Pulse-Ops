@@ -115,6 +115,24 @@ async def test_monitor_name_is_escaped(api: httpx.AsyncClient) -> None:
         assert "&lt;script&gt;" in page.text
 
 
+async def test_sql_injection_attempts_are_plain_data(api: httpx.AsyncClient) -> None:
+    """Cenário 23: texto com SQL é gravado e exibido como dado; filtros inválidos dão 422."""
+    name = "x'); DROP TABLE monitors; --"
+    created = await api.post(
+        "/api/v1/monitors", json={"name": name, "url": "https://x.example.com/"}
+    )
+    assert created.status_code == 201
+    assert (await api.get(f"/api/v1/monitors/{created.json()['id']}")).json()["name"] == name
+    monitor_id = created.json()["id"]
+    bad_filter = await api.get(f"/api/v1/monitors/{monitor_id}/checks?outcome=x' OR '1'='1")
+    assert bad_filter.status_code == 422
+    bad_status = await api.get("/api/v1/incidents?status=open' OR 1=1 --")
+    assert bad_status.status_code == 422
+    bad_cursor = await api.get(f"/api/v1/monitors/{monitor_id}/checks?cursor=1;DROP")
+    assert bad_cursor.status_code == 422
+    assert [m["name"] for m in (await api.get("/api/v1/monitors")).json()] == [name]
+
+
 async def test_security_headers(api: httpx.AsyncClient) -> None:
     response = await api.get("/")
     assert "default-src 'self'" in response.headers["content-security-policy"]
@@ -153,3 +171,80 @@ async def test_times_are_shown_in_display_timezone(
     page = await api.get(f"/monitors/{monitor.id}")
     assert "15/01/2026 09:00:00" in page.text
     assert "America/Sao_Paulo" in page.text
+
+
+def _form_of(monitor: dict[str, object], token: str, **changes: object) -> dict[str, str]:
+    fields = (
+        "name",
+        "description",
+        "url",
+        "method",
+        "interval_seconds",
+        "timeout_seconds",
+        "accepted_status_codes",
+        "latency_threshold_ms",
+        "failure_threshold",
+        "recovery_threshold",
+    )
+    data = {f: str(monitor[f]) for f in fields}
+    data.update({k: str(v) for k, v in changes.items()})
+    data["csrf_token"] = token
+    return data
+
+
+async def test_edit_and_lifecycle_actions_through_forms(api: httpx.AsyncClient) -> None:
+    """RF01 pela interface: editar, pausar, retomar, verificar agora e arquivar."""
+    monitor = (
+        await api.post("/api/v1/monitors", json={"name": "Loja", "url": "https://x.example.com/"})
+    ).json()
+    path = f"/monitors/{monitor['id']}"
+    edit = await api.get(f"{path}/edit")
+    token = CSRF.search(edit.text)
+    assert token and 'value="Loja"' in edit.text
+    csrf = token.group(1)
+
+    invalid = await api.post(f"{path}/edit", data=_form_of(monitor, csrf, failure_threshold=0))
+    assert invalid.status_code == 422 and "Loja" in invalid.text
+    saved = await api.post(f"{path}/edit", data=_form_of(monitor, csrf, name="Loja online"))
+    assert saved.status_code == 303 and saved.headers["location"] == path
+    assert "Loja online" in (await api.get(path)).text
+
+    for action, label in [("pause", "Pausado"), ("resume", "Ativo"), ("check", "Ativo")]:
+        response = await api.post(f"{path}/{action}", data={"csrf_token": csrf})
+        assert response.status_code == 303, action
+        assert label in (await api.get(path)).text
+    assert (await api.post(f"{path}/desconhecida", data={"csrf_token": csrf})).status_code == 404
+    assert (await api.post(f"{path}/archive", data={"csrf_token": csrf})).status_code == 303
+    assert (await api.post(f"{path}/pause", data={"csrf_token": csrf})).status_code == 409
+    archived_edit = await api.post(f"{path}/edit", data=_form_of(monitor, csrf, name="Outra"))
+    assert archived_edit.status_code == 409
+    assert (await api.get("/monitors/9999/edit")).status_code == 404
+
+
+async def test_destination_form_validates_and_toggles(api: httpx.AsyncClient) -> None:
+    page = await api.get("/notifications")
+    token = CSRF.search(page.text)
+    assert token
+    csrf = token.group(1)
+    form = "/notifications/destinations"
+
+    blocked = await api.post(
+        form, data={"csrf_token": csrf, "name": "Interno", "url": "http://10.0.0.5/hook"}
+    )
+    assert blocked.status_code == 422 and "10.0.0.5" in blocked.text  # valor preenchido volta
+    unnamed = await api.post(
+        form, data={"csrf_token": csrf, "name": "", "url": "https://h.example.com/"}
+    )
+    assert unnamed.status_code == 422 and "obrigatório" in unnamed.text
+
+    ok = {"csrf_token": csrf, "name": "Equipe", "url": "https://hooks.example.com/pulse"}
+    assert (await api.post(form, data=ok)).status_code == 303
+    duplicate = await api.post(form, data=ok)
+    assert duplicate.status_code == 422 and "já existe um destino" in duplicate.text
+
+    [destination] = (await api.get("/api/v1/destinations")).json()
+    toggle = f"{form}/{destination['id']}/toggle"
+    assert (await api.post(toggle, data={"csrf_token": csrf})).status_code == 303
+    assert "Desativado" in (await api.get("/notifications")).text
+    assert (await api.post(f"{form}/9999/toggle", data={"csrf_token": csrf})).status_code == 404
+    assert (await api.post(toggle, data={"csrf_token": "errado"})).status_code == 403

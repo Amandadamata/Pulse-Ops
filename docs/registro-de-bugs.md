@@ -88,3 +88,20 @@ Riscos que ainda não aconteceram ficam no [modelo de ameaças](modelo-de-ameaca
 - **Teste de regressão:** `tests/integration/test_incident_lifecycle.py::test_result_of_run_started_before_pause_and_resume_does_not_count`.
 - **Limitação remanescente:** o nome `config_version` agora significa "versão da
   contagem", não só da configuração; está documentado em RF03.5.
+
+## B7 — Erro 500 ao cadastrar destino de webhook com nome repetido pelo formulário
+
+- **Sintoma:** o teste novo `test_destination_form_validates_and_toggles` recebeu
+  `MissingGreenlet: greenlet_spawn has not been called` em vez da página com o erro
+  "já existe um destino com este nome".
+- **Como reproduzir:** na versão anterior, cadastrar pelo formulário de
+  `/notifications` dois destinos com o mesmo nome.
+- **Causa:** depois do `IntegrityError`, a rota faz `rollback()`, o que expira todos
+  os objetos da sessão do banco, inclusive a sessão do operador guardada em
+  `AuthContext`. Ao montar a página, o template leu `csrf_token`; o SQLAlchemy
+  tentou recarregar o objeto com I/O síncrono fora do contexto assíncrono.
+- **Correção:** `AuthContext` (`web/deps.py`) passou a guardar só valores simples
+  (`operator_id`, `username`, `csrf_token`) copiados no início da requisição.
+- **Teste de regressão:** `tests/integration/test_dashboard.py::test_destination_form_validates_and_toggles`.
+- **Limitação remanescente:** nenhuma conhecida. Outras rotas que fazem rollback não
+  leem objetos do ORM depois dele.
