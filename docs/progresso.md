@@ -109,9 +109,14 @@ Entregue: `README.md`, `LICENSE` (MIT), `.github/workflows/ci.yml` com
 `permissions: contents: read`, screenshots reais.
 Como verifiquei: `actionlint` sem erros no workflow; o passo de migrações do CI
 foi executado localmente (upgrade, downgrade e upgrade em banco novo).
-Falta: publicar e confirmar o resultado do CI.
-Bloqueios: nenhum repositório GitHub acessível nesta sessão (`list_repos` vazio);
-pedido o repositório de destino à Amanda em 2026-10-22.
+Publicado em 2026-10-22 em <https://github.com/Amandadamata/Pulse-Ops> (push sem
+force; o commit inicial criado pelo GitHub Desktop foi integrado por merge).
+Primeira execução do CI verde nos dois jobs (qualidade e imagem Docker com o
+laboratório): <https://github.com/Amandadamata/Pulse-Ops/actions/runs/39780395966>.
+Falta: —
+Bloqueios: nenhum. Aviso do GitHub: `actions/checkout@v4` e `astral-sh/setup-uv@v6`
+ainda usam Node.js 20 e são executadas em Node.js 24; atualizar as versões quando
+houver novas.
 
 ### Etapa 9 — Material de estudo
 Entregue: `docs/estudo/pulseops-por-dentro-volume-1.pdf` (partes A, B, C, E a J e

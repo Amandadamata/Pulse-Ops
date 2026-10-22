@@ -1,5 +1,7 @@
 # PulseOps
 
+[![CI](https://github.com/Amandadamata/Pulse-Ops/actions/workflows/ci.yml/badge.svg)](https://github.com/Amandadamata/Pulse-Ops/actions/workflows/ci.yml)
+
 Monitoramento de APIs HTTP que explica cada mudança de estado. O PulseOps verifica
 endpoints periodicamente, abre e encerra incidentes por regras explícitas
 (N falhas seguidas abrem, M sucessos seguidos encerram), guarda o motivo de cada
