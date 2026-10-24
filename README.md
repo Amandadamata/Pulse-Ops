@@ -1,265 +1,143 @@
-# PulseOps
+<img width="100%" src="https://capsule-render.vercel.app/api?type=rect&color=A8D5BA&height=120&text=PulseOps&fontSize=36&fontColor=1B4332&fontAlignY=40&desc=API%20monitoring%20that%20explains%20every%20incident&descSize=16&descAlignY=75" alt="PulseOps"/>
+
+**English** · [Português](README.pt-BR.md)
 
 [![CI](https://github.com/Amandadamata/Pulse-Ops/actions/workflows/ci.yml/badge.svg)](https://github.com/Amandadamata/Pulse-Ops/actions/workflows/ci.yml)
+![Python 3.12](https://img.shields.io/badge/Python-3.12-A8D5BA?style=flat-square&logo=python&logoColor=white&labelColor=1B4332)
+![FastAPI](https://img.shields.io/badge/FastAPI-API-A8D5BA?style=flat-square&logo=fastapi&logoColor=white&labelColor=1B4332)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-A8D5BA?style=flat-square&logo=postgresql&logoColor=white&labelColor=1B4332)
+![pytest](https://img.shields.io/badge/pytest-251%20tests-A8D5BA?style=flat-square&logo=pytest&logoColor=white&labelColor=1B4332)
+![Docker](https://img.shields.io/badge/Docker-Compose-A8D5BA?style=flat-square&logo=docker&logoColor=white&labelColor=1B4332)
+[![License: MIT](https://img.shields.io/badge/license-MIT-A8D5BA?style=flat-square&labelColor=1B4332)](LICENSE)
 
-Monitoramento de APIs HTTP que explica cada mudança de estado. O PulseOps verifica
-endpoints periodicamente, abre e encerra incidentes por regras explícitas
-(N falhas seguidas abrem, M sucessos seguidos encerram), guarda o motivo de cada
-decisão e entrega alertas por webhook sem travar as verificações.
+A Python web app that checks HTTP APIs on a schedule and opens an incident when one keeps failing.
 
-Projeto pessoal de estudo, construído em Python com FastAPI, PostgreSQL e um
-worker assíncrono separado.
+## The problem
 
-![Painel do PulseOps durante a demonstração: dois monitores indisponíveis e um saudável](docs/imagens/painel.png)
+A small team keeps a few APIs running and finds out something broke when a user complains. Basic uptime checks help, but they raise two new problems. A single slow response can trigger a false alarm, and a long outage can flood the team with the same alert again and again. When an incident is over, nobody remembers exactly when it started or what the error was. *(This is a fictional scenario I wrote as the basis for the requirements.)*
 
-*Captura real do painel durante o laboratório de falhas: o serviço principal está
-com incidente aberto depois de três respostas HTTP 500 seguidas.*
+## The solution
 
-## Para quem está avaliando
+PulseOps checks each endpoint at a set interval and records every result. One failure isn't enough to raise an alarm: by default, three failures in a row open an incident, and two successes in a row close it. A slow response marks the API as "degraded" without opening an incident. Every change comes with a reason in plain words, like "Failure 1 of 3 needed to open an incident: no response in 2 s". Alerts go out by webhook from a separate queue, so a slow receiver never delays the checks.
 
-O que o projeto mostra na prática, e onde conferir cada ponto:
+Tools like Uptime Kuma and Gatus already do monitoring, and this isn't meant to replace them. I kept the scope small: one operator, one worker, HTTP checks and webhook alerts.
 
-| Competência | Onde ver |
+## Demo
+
+<table>
+<tr>
+<td width="50%"><img src="docs/imagens/painel.png" alt="Dashboard with two monitors down and one healthy"/></td>
+<td width="50%"><img src="docs/imagens/incidente.png" alt="Incident page with timeline, opening and closing reasons and webhook delivery attempts"/></td>
+</tr>
+<tr>
+<td><sub>Dashboard during the failure lab: the main service has an open incident after three HTTP 500 responses in a row.</sub></td>
+<td><sub>An incident from start to finish: first failure, confirmation, recovery, and four tries to deliver the alert while the receiver was returning 503.</sub></td>
+</tr>
+</table>
+
+Real screenshots from the local lab (the interface is in Portuguese). The lab script `scripts/demo.sh` reproduces this in 11 checked steps, and CI runs it on every push to `main` and every pull request.
+
+## Features
+
+- HTTP/HTTPS monitors with interval, timeout, accepted status codes, latency limit and failure/recovery thresholds. Pause, resume, check now or archive without losing history.
+- Each check is classified: healthy, slow, unexpected status, timeout, connection or DNS error, TLS error, blocked target, or an internal PulseOps error (which never counts against the target).
+- Incidents opened and closed by explicit thresholds, with a timeline and the reason for each step. The database prevents two open incidents for the same monitor.
+- Webhook alerts with retries and backoff. Repeated failures don't create repeated alerts, only state changes do.
+- History and metrics: availability, average and p95 latency, coverage gaps, and an SVG latency chart.
+- A JSON API under `/api/v1` and a server-rendered dashboard, both behind a login with Argon2id password hashing and CSRF protection.
+- Protection against SSRF: monitors can't point to private addresses, loopback or cloud metadata, even in disguised forms like `0x7f.1`.
+
+## What this project shows
+
+| Skill | Where / how it shows up |
 |---|---|
-| Back-end em Python com FastAPI, API JSON e validação de entrada | [`src/pulseops/web/api.py`](src/pulseops/web/api.py), [`src/pulseops/web/schemas.py`](src/pulseops/web/schemas.py) |
-| Modelagem de dados e PostgreSQL: constraints, índices únicos parciais, migrações | [`src/pulseops/db/models.py`](src/pulseops/db/models.py), [`docs/arquitetura.md`](docs/arquitetura.md) |
-| Concorrência e consistência: `FOR UPDATE SKIP LOCKED`, advisory lock, transações curtas | [`src/pulseops/services/processing.py`](src/pulseops/services/processing.py), [`tests/integration/test_consistency.py`](tests/integration/test_consistency.py) |
-| Programação assíncrona (asyncio) num processo worker separado | [`src/pulseops/worker/runner.py`](src/pulseops/worker/runner.py) |
-| Regra de negócio isolada e testável, sem banco nem rede | [`src/pulseops/domain/health.py`](src/pulseops/domain/health.py), [`tests/unit/test_health.py`](tests/unit/test_health.py) |
-| Integração confiável entre sistemas: outbox, retentativas com backoff, deduplicação | [`src/pulseops/services/alerts.py`](src/pulseops/services/alerts.py), [ADR 0007](docs/decisoes/0007-outbox-e-entrega-pelo-menos-uma-vez.md) |
-| Segurança de aplicação: SSRF com DNS rebinding, CSRF, sessão, Argon2id, CSP | [`src/pulseops/security/`](src/pulseops/security/), [`docs/modelo-de-ameacas.md`](docs/modelo-de-ameacas.md) |
-| Testes automatizados com banco real, relógio falso e rede simulada (251 testes, 95% de cobertura) | [`tests/`](tests/), [`docs/estrategia-de-testes.md`](docs/estrategia-de-testes.md) |
-| Docker, Compose e CI com GitHub Actions (lint, tipos, testes, migrações, auditoria) | [`compose.yaml`](compose.yaml), [`.github/workflows/ci.yml`](.github/workflows/ci.yml) |
-| Diagnóstico e correção de bugs com causa e teste de regressão | [`docs/registro-de-bugs.md`](docs/registro-de-bugs.md) (10 bugs) |
-| Decisões técnicas justificadas, com alternativas descartadas | [`docs/decisoes/`](docs/decisoes/) (11 ADRs) |
-| Medição antes de afirmar: ensaio de carga e instalação limpa registrados | [`docs/evidencias/`](docs/evidencias/) |
+| Python, organized in modules | A typed package in `src/pulseops/`, checked by mypy in strict mode. The core rule lives in `domain/` with no database or network, so it can be tested on its own. |
+| Business rule tested in isolation | `HealthTracker` in [`src/pulseops/domain/health.py`](src/pulseops/domain/health.py) counts consecutive failures and successes and decides when to open or close an incident. |
+| REST API | [`src/pulseops/web/api.py`](src/pulseops/web/api.py): FastAPI routes for monitors, checks, metrics, incidents and alerts, with Pydantic models for input and output. |
+| SQL and PostgreSQL | Tables, constraints and partial unique indexes in [`src/pulseops/db/models.py`](src/pulseops/db/models.py), created by an Alembic migration. `FOR UPDATE SKIP LOCKED` in [`src/pulseops/services/processing.py`](src/pulseops/services/processing.py) stops two transactions from taking the same monitor. |
+| Automated tests | 251 pytest tests: 133 unit tests and 118 integration tests against a real PostgreSQL. DNS, HTTP and the clock are replaced by test doubles, so the suite never touches the internet. |
+| Docker and CI | `compose.yaml` runs the database, migrations, API and worker. [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs Ruff, mypy, the tests with a coverage gate (90% overall, 95% for domain and security), migrations up and down, a dependency audit and the Docker lab. |
+| Requirements and specification | [`docs/especificacao.md`](docs/especificacao.md) and [`docs/requisitos.md`](docs/requisitos.md) define the rules with codes. [`docs/matriz-de-rastreabilidade.md`](docs/matriz-de-rastreabilidade.md) links each required scenario to the test that checks it. |
+| Debugging and decisions | 10 real bugs with cause and regression test in [`docs/registro-de-bugs.md`](docs/registro-de-bugs.md), and 11 architecture decision records in [`docs/decisoes/`](docs/decisoes/). |
 
-**Leitura em 10 minutos:** este README até "Regras importantes", depois
-[`src/pulseops/domain/health.py`](src/pulseops/domain/health.py) (a regra central) e
-um bug do [registro](docs/registro-de-bugs.md), como o B8, que foi achado pelo
-ensaio de carga.
+## How I built it
 
-**Por que cada coisa é como é:** cada escolha que não é óbvia tem uma ADR em
-[`docs/decisoes/`](docs/decisoes/) com o contexto, as alternativas e as
-consequências. O guia de estudo em [`docs/estudo/`](docs/estudo/) explica o código
-arquivo por arquivo.
+I wrote the specification: the scenario, the requirements, the incident rules, the honesty rules for the docs and the acceptance criteria. The code, tests and documentation were generated with Claude Code (Anthropic's AI coding assistant) from that specification, one stage at a time. That's why most commits show Claude as the author.
 
-## Problema e cenário (fictício)
+My part after each stage was to review it, run the lab, and decide what to publish. I'm studying the code file by file with the two study guides in [`docs/estudo/`](docs/estudo/). My Python base comes from Harvard's CS50P, where I learned functions, exceptions and unit tests with pytest, and I work on this project in VS Code.
 
-> **Cenário fictício**, usado como base de requisitos: uma pequena equipe mantém
-> APIs usadas por uma aplicação e descobre problemas quando alguém reclama. Ela
-> precisa acompanhar disponibilidade e lentidão, consultar evidências dos
-> incidentes e receber alertas sem ser inundada por notificações repetidas.
+## How it works
 
-Ferramentas como Uptime Kuma, Gatus e Healthchecks já resolvem monitoramento (a
-comparação está em [`docs/pesquisa-de-mercado.md`](docs/pesquisa-de-mercado.md)).
-O PulseOps não é uma ideia nova. O foco dele é um escopo pequeno resolvido por
-inteiro: a regra de incidentes, o histórico, os alertas confiáveis e um laboratório
-que reproduz as falhas.
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'primaryColor':'#D8F3DC','primaryTextColor':'#1B4332','primaryBorderColor':'#2D6A4F','lineColor':'#2D6A4F','secondaryColor':'#A8D5BA','tertiaryColor':'#FFFFFF'}}}%%
+flowchart LR
+    B([Browser or API client]) --> API[api<br/>FastAPI: dashboard + /api/v1]
+    API --> DB[(PostgreSQL)]
+    W[worker<br/>asyncio] --> DB
+    W -->|checks| T[Monitored APIs]
+    W -->|alerts| H[Webhooks]
+```
 
-## Funcionalidades implementadas
+There are two processes built from the same image. The **api** serves the dashboard and the JSON API. The **worker** runs the checks in the background. For each check, the worker takes the monitor in a short transaction, makes the HTTP request with no transaction open, and then saves the result, the counters, any incident change and any alert in one more short transaction. Alerts wait in an "outbox" table, and a separate loop delivers them with retries. Because the queue lives in PostgreSQL, the project needs no Redis or Celery.
 
-- **Monitores HTTP/HTTPS** com intervalo, timeout, status aceitos (`200-299,301`),
-  limite de latência e limiares de falha e de recuperação. Dá para pausar, retomar,
-  verificar agora e arquivar sem apagar o histórico.
-- **Classificação de cada check**: saudável, lento, status inesperado, timeout,
-  erro de conexão ou DNS, erro TLS, destino bloqueado ou erro interno do próprio
-  PulseOps (que não conta como falha do alvo).
-- **Incidentes com regra explícita.** A lentidão deixa o monitor "degradado" sem
-  abrir incidente. O incidente registra a primeira falha, a confirmação, a
-  recuperação e os limiares vigentes na abertura. O banco impede dois incidentes
-  abertos para o mesmo monitor.
-- **Explicação de cada mudança**, por exemplo: "Falha 1 de 3 necessárias para abrir
-  incidente: sem resposta em 2 s." ou "Recuperado após 2 sucessos consecutivos".
-- **Alertas por webhook com outbox.** O evento é gravado na mesma transação que
-  muda o incidente. Um entregador separado envia com timeout, retentativas com
-  backoff e teto, e registra cada tentativa. A entrega é "pelo menos uma vez", com
-  `X-PulseOps-Event-Id` para o receptor deduplicar.
-- **Histórico e métricas**: checks paginados por cursor, filtros por período e
-  resultado, proporção de checks disponíveis e saudáveis, latência média e p95,
-  incidentes e lacunas de cobertura, gráfico de latência em SVG.
-- **Painel web** (Jinja2, sem framework de front-end) com estados vazio, sem dados
-  e desatualizado. Os horários são exibidos no fuso configurado e armazenados em UTC.
-- **Acesso de um operador** com sessão em cookie `HttpOnly`, senha com Argon2id e
-  CSRF em formulários e na API.
-- **Proteção contra SSRF**: só `http`/`https`, portas permitidas, nada de
-  endereços privados, loopback, link-local ou metadados de nuvem, inclusive em
-  formas alternativas (`0x7f.1`, `[::ffff:127.0.0.1]`). O nome é resolvido e
-  validado no momento da conexão, e a conexão usa o IP validado. Redirecionamentos
-  não são seguidos.
-- **Saúde do próprio PulseOps**: `/health/live`, `/health/ready`, heartbeat do
-  worker e logs JSON com dados sensíveis mascarados.
+## Technical decisions
 
-## Início rápido
+- **I chose to keep the job queue in PostgreSQL instead of adding Redis and Celery,** because one worker is enough for this scope, and it's one less service to run ([ADR 0002](docs/decisoes/0002-api-e-worker-separados.md)).
+- **I chose an outbox table instead of sending the alert inside the check,** so a slow webhook never delays a check ([ADR 0007](docs/decisoes/0007-outbox-e-entrega-pelo-menos-uma-vez.md)).
+- **I chose not to open an incident for slow responses,** because a slow API is still answering. It shows up as "degraded" instead ([ADR 0004](docs/decisoes/0004-lentidao-nao-abre-incidente.md)).
+- **I chose a server-rendered dashboard with Jinja2 and SVG instead of a JavaScript framework,** to keep the project focused on the back end ([ADR 0010](docs/decisoes/0010-dashboard-server-side.md)).
 
-Requisitos: Docker com Compose v2 e Git.
+## Running it
+
+You need Docker with Compose v2 and Git.
 
 ```bash
 git clone https://github.com/Amandadamata/Pulse-Ops.git pulseops
 cd pulseops
-cp .env.example .env                 # troque POSTGRES_PASSWORD
-docker compose up -d --build --wait  # banco, migrações, API e worker
+cp .env.example .env                 # change POSTGRES_PASSWORD
+docker compose up -d --build --wait  # database, migrations, API and worker
 docker compose run --rm api pulseops create-admin --username amanda
 ```
 
-Abra <http://127.0.0.1:8000>, entre com o usuário criado e cadastre um monitor.
-Fora do laboratório, monitores só podem apontar para endereços públicos, com
-intervalo mínimo de 30 s.
+Open <http://127.0.0.1:8000>, sign in and add a monitor. To watch the failure lab, run `scripts/demo.sh` (about 70 seconds).
 
-Para parar: `docker compose down` (os dados ficam no volume `pgdata`).
-
-## Demonstração de falha e recuperação
+To run the tests, use [uv](https://docs.astral.sh/uv/) and a PostgreSQL container:
 
 ```bash
-scripts/demo.sh
-```
-
-O script sobe o ambiente com o perfil `demo`, que adiciona um alvo e um receptor
-de webhooks controláveis, e executa 11 passos. Cada passo imprime o que verifica
-e o script termina com código diferente de zero se algo não se confirmar:
-
-1. Ambiente no ar (API pronta, worker ativo).
-2. Monitores preparados sem duplicar (pode rodar o script de novo).
-3. Checks saudáveis, depois um check lento: monitor degradado, sem incidente.
-4. Um timeout: "Falha 1 de 3", ainda sem incidente.
-5. Erros HTTP 500: o incidente abre na 3ª falha seguida, com o motivo registrado.
-6. Mais falhas não abrem outro incidente.
-7. Alvo restaurado: o primeiro sucesso ainda não encerra (o roteiro mostra isso
-   quando consegue observar esse momento; a regra é verificada em
-   `tests/unit/test_health.py`).
-8. O segundo sucesso encerra o incidente e o alerta de recuperação chega.
-9. Receptor fora do ar (503) e novo incidente: a entrega fica pendente.
-10. Os checks continuam sendo gravados enquanto o alerta espera.
-11. Receptor de volta: a retentativa entrega o alerta; um reenvio manual do mesmo
-    evento é reconhecido como duplicado.
-
-A senha da operadora `demo` é gerada na primeira execução e fica em
-`.demo/admin-password` (fora do Git). A execução leva cerca de 70 s.
-
-## Arquitetura
-
-```
-Navegador ──> api (FastAPI: painel + /api/v1) ──┐
-                                                ├──> PostgreSQL
-              worker (asyncio) ─────────────────┘
-                ├── laço de checks ──> APIs monitoradas (transporte com política SSRF)
-                ├── laço de entregas ──> webhooks
-                └── manutenção: heartbeat, checks interrompidos, retenção
-```
-
-- API e worker são processos separados com a mesma imagem. O worker é único,
-  garantido por um advisory lock do PostgreSQL.
-- Cada check segue três passos: transação curta para reservar, requisição HTTP
-  sem transação aberta e transação curta que grava resultado, contadores,
-  incidente e alerta juntos.
-- O código fica separado em `domain/` (regras puras), `services/` (casos de uso),
-  `security/`, `checks/`, `notifications/`, `db/`, `worker/` e `web/`.
-
-Detalhes, diagrama ER e justificativa de cada índice estão em
-[`docs/arquitetura.md`](docs/arquitetura.md).
-
-## Regras importantes
-
-| Regra | Comportamento |
-|---|---|
-| Abertura | `failure_threshold` falhas seguidas (padrão 3) abrem o incidente. O início é a primeira falha e a confirmação é a falha que atingiu o limiar |
-| Recuperação | `recovery_threshold` sucessos seguidos (padrão 2). Respostas lentas contam como sucesso para recuperar |
-| Lentidão | Status aceito acima do limite de latência = "lento": monitor degradado, sem incidente |
-| Erro interno | Falha do próprio PulseOps não altera contadores nem incidentes |
-| Pausar ou arquivar | Encerra o incidente aberto como "encerrado pelo operador" (não "recuperado") e zera os contadores |
-| Editar a verificação | Zera os contadores. O incidente aberto continua e passa a usar o novo limiar de recuperação |
-| Reinício do worker | Contadores e incidente estão no banco. Atraso maior que um intervalo vira lacuna registrada, sem rajada de checks |
-| Alertas | Só transições geram eventos (abertura, recuperação, encerramento). Falhas repetidas não geram novos alertas |
-| Métricas | Sem dados aparece "N/A", nunca 0% ou 100%. O p95 é nearest-rank, e com menos de 20 amostras é o maior valor |
-
-A lista completa, com códigos usados nos testes, está em
-[`docs/requisitos.md`](docs/requisitos.md).
-
-## Testes e comandos
-
-O projeto usa [uv](https://docs.astral.sh/uv/) (Python 3.12).
-
-```bash
-uv sync                                  # dependências fixadas em uv.lock
+uv sync
 docker run -d --name pulseops-testdb -e POSTGRES_USER=pulseops \
   -e POSTGRES_PASSWORD=pulseops -p 127.0.0.1:5433:5432 postgres:16-alpine
-uv run pytest                            # 251 testes; integração com PostgreSQL real
-uv run pytest --cov                      # cobertura (metas em docs/estrategia-de-testes.md)
-uv run ruff check . && uv run ruff format --check .
-uv run mypy                              # modo estrito
-uv run python scripts/conferir_referencias.py  # testes citados nos docs existem
-scripts/ensaio_carga.sh                  # ensaio de carga local (requer a demo no ar)
+uv run pytest
 ```
 
-A suíte não acessa a internet: DNS, transporte HTTP e relógio são substituídos por
-dublês nos testes. Cada um dos 25 cenários obrigatórios aponta para o teste que o
-verifica em [`docs/matriz-de-rastreabilidade.md`](docs/matriz-de-rastreabilidade.md).
-Resultados medidos (cobertura, carga, auditoria de dependências) ficam em
-[`docs/evidencias/`](docs/evidencias/).
+## Project structure
 
-O CI (GitHub Actions, `.github/workflows/ci.yml`) roda lint, formatação, tipos,
-testes com PostgreSQL como serviço, migrações em banco limpo, auditoria de
-dependências e build da imagem. É só CI: nada é implantado.
+```text
+src/pulseops/
+├── domain/         # pure rules: health, metrics, status codes (no database, no network)
+├── services/       # use cases: monitors, incidents, alerts, processing, auth
+├── checks/         # the HTTP checker
+├── security/       # SSRF policy, passwords, safe transport
+├── notifications/  # webhook sender
+├── db/             # SQLAlchemy models and session
+├── worker/         # background process: checks, deliveries, maintenance
+└── web/            # FastAPI app, JSON API, dashboard templates
+tests/              # unit/ and integration/ (251 tests)
+migrations/         # Alembic
+lab/                # fake target and webhook receiver for the demo
+docs/               # spec, requirements, ADRs, threat model, bug log, study guides (in Portuguese)
+```
 
-## Decisões e alternativas
+## Limits and what's next
 
-As decisões ficam em [`docs/decisoes/`](docs/decisoes/). As principais:
+- One operator and one worker. No multiple users or horizontal scaling.
+- No login rate limit, so the dashboard should only be exposed on a local network or behind a proxy.
+- PulseOps can't warn you when it goes down itself. An external checker should watch `/health/ready`.
+- Webhooks aren't signed with HMAC yet, and monitors can't send auth headers to their targets.
 
-- **API e worker separados**, sem Celery nem Redis: o banco já guarda a fila
-  (`next_run_at`, outbox), e um worker é suficiente para o escopo (ADR 0002).
-- **Conectar no IP validado** em vez de só validar o DNS antes: evita DNS
-  rebinding (ADR 0005).
-- **Outbox no PostgreSQL** em vez de enviar o alerta dentro da verificação: um
-  webhook lento não atrasa nenhum check (ADR 0007).
-- **Painel renderizado no servidor** com Jinja2 e SVG, sem framework JavaScript
-  (ADR 0010).
-- **mypy** como verificador de tipos, por causa do plugin do Pydantic (ADR 0009).
+Next steps on the roadmap: HMAC-signed webhooks and auth headers for monitored APIs.
 
-Os bugs reais encontrados durante o desenvolvimento, com causa e teste de
-regressão, estão em [`docs/registro-de-bugs.md`](docs/registro-de-bugs.md).
+## Author
 
-## Limitações
-
-- **Um operador e um worker.** Não há usuários múltiplos nem escala horizontal.
-- **Sem limite de tentativas de login.** Exponha o painel só em rede local, VPN ou
-  atrás de um proxy reverso com HTTPS e rate limit.
-- **O PulseOps não avisa quando ele mesmo cai.** Use um verificador externo
-  apontando para `/health/ready`.
-- **Granularidade de cerca de 1 s** no início dos checks (tick do worker).
-- **Webhooks sem assinatura HMAC** e **sem headers de autenticação para os alvos**:
-  ficam como roadmap, não estão implementados.
-- **Proteção SSRF na aplicação**, sem firewall de saída configurado pelo projeto.
-  Ela depende de um detalhe interno do HTTPX para injetar o transporte
-  ([`docs/modelo-de-ameacas.md`](docs/modelo-de-ameacas.md)).
-- O ensaio de carga mediu 200 monitores a cada 10 s em uma máquina de 4 CPUs
-  ([`docs/evidencias/ensaio-de-carga.md`](docs/evidencias/ensaio-de-carga.md)).
-  Isso não indica capacidade em produção.
-
-## Como este projeto foi feito
-
-Projeto pessoal de Amanda da Mata, estudante de Análise e Desenvolvimento de
-Sistemas, desenvolvido a partir de um cenário de requisitos fictício. Não é
-trabalho contratado nem experiência em equipe.
-
-A implementação, os testes e a documentação foram produzidos com o Claude Code
-(assistente de IA da Anthropic), a partir de uma especificação detalhada escrita
-por Amanda. A especificação definiu requisitos, regras de honestidade e critérios
-de aceitação. A revisão, o estudo do código e as decisões de publicação são
-responsabilidade de Amanda. O material de estudo que acompanha o projeto serve
-justamente para esse estudo.
-
-Outros documentos: [operação e solução de problemas](docs/operacao.md),
-[estratégia de testes](docs/estrategia-de-testes.md),
-[modelo de ameaças](docs/modelo-de-ameacas.md), [progresso](docs/progresso.md).
-
-## Referências e licença
-
-- OWASP Server-Side Request Forgery Prevention Cheat Sheet, base da política de
-  destinos.
-- FastAPI, SQLAlchemy 2.x, Alembic, HTTPX, Pydantic e Pytest, consultados pela
-  documentação e pelas assinaturas das versões fixadas em `uv.lock` (detalhes em
-  [`docs/pesquisa-de-mercado.md`](docs/pesquisa-de-mercado.md)).
-- Projetos comparados: Uptime Kuma (MIT), Gatus (Apache-2.0) e Healthchecks
-  (BSD-3-Clause). Nenhum código deles foi copiado.
-
-Licença MIT, ver [`LICENSE`](LICENSE).
+**Amanda da Mata** · Back-End developer in training · Java and Python  
+[LinkedIn](https://www.linkedin.com/in/amanda-da-mata-492106288) · [amandadamataprofissional@gmail.com](mailto:amandadamataprofissional@gmail.com) · [GitHub](https://github.com/Amandadamata)
