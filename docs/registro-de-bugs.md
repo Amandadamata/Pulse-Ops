@@ -170,3 +170,30 @@ Riscos que ainda não aconteceram ficam no [modelo de ameaças](modelo-de-ameaca
   eles verificam (falhas marcadas e fora do resumo, nada inventado sem dados)
   continua igual.
 - **Limitação remanescente:** nenhuma conhecida.
+
+## B11 — Roteiro do laboratório lia a entrega antes de o worker gravar o resultado
+
+- **Sintoma:** o job "Imagem Docker e laboratório" do CI falhou no `main` em
+  2026-10-24, no passo 9, com `FALHOU: entrega pendente, último erro: None`
+  (<https://github.com/Amandadamata/Pulse-Ops/actions/runs/40080769098>). O commit de
+  merge tinha exatamente o mesmo conteúdo do commit do PR, cujo CI havia passado, e o
+  PR só mudou documentação.
+- **Como reproduzir:** a corrida depende de tempo e não foi forçada no laboratório
+  real. Os testes novos simulam a sequência de estados; com a condição antiga
+  (`attempt_count >= 1`, sem olhar o status), 4 dos 5 casos falharam.
+- **Causa:** erro do roteiro `scripts/demo_flow.py`, não do produto. O worker reserva a
+  entrega numa transação (`status = 'sending'`, `attempt_count + 1`), faz o envio e só
+  então grava o resultado em outra transação (`claim_due_deliveries` e
+  `record_delivery_result` em `src/pulseops/services/alerts.py`). O roteiro aceitava
+  qualquer entrega com `attempt_count >= 1` e consultava a cada 0,5 s; quando a consulta
+  caía nesse intervalo, recebia a entrega sem erro registrado. No log, a falha aparece
+  em 09:09:32,058 e o worker registra a tentativa com `HTTP 503` em 09:09:32,061. A
+  mensagem também atrapalhava: dizia "entrega pendente" sem mostrar o status real.
+- **Correção:** `Demo.settled_delivery` só devolve a entrega depois de gravado o
+  resultado (status diferente de `sending`) e é usada no passo 9 e no passo 11, que
+  tinha a mesma corrida: lia a entrega logo depois de o receptor receber o alerta, antes
+  de o worker gravar `delivered`. A mensagem do passo 9 agora mostra o status real.
+- **Teste de regressão:** `tests/unit/test_demo_flow.py::test_attempt_without_recorded_result_is_not_settled`
+  e `test_waits_for_the_worker_to_record_the_attempt`.
+- **Limitação remanescente:** os testes novos usam uma API simulada. O roteiro completo
+  só roda com Docker; a conferência no laboratório real é a do job do CI.

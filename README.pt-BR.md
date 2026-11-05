@@ -58,7 +58,7 @@ Capturas reais do laboratório local. O roteiro `scripts/demo.sh` reproduz tudo 
 | Testes automatizados | 251 testes com pytest: 133 de unidade e 118 de integração com PostgreSQL real. DNS, HTTP e relógio são trocados por dublês, então a suíte nunca acessa a internet. |
 | Docker e CI | O `compose.yaml` sobe banco, migrações, API e worker. O [`.github/workflows/ci.yml`](.github/workflows/ci.yml) roda Ruff, mypy, os testes com meta de cobertura (90% no geral, 95% em domínio e segurança), migrações para cima e para baixo, auditoria de dependências e o laboratório em Docker. |
 | Requisitos e especificação | [`docs/especificacao.md`](docs/especificacao.md) e [`docs/requisitos.md`](docs/requisitos.md) definem as regras com códigos. A [`docs/matriz-de-rastreabilidade.md`](docs/matriz-de-rastreabilidade.md) liga cada cenário obrigatório ao teste que o verifica. |
-| Depuração e decisões | 10 bugs reais com causa e teste de regressão em [`docs/registro-de-bugs.md`](docs/registro-de-bugs.md), e 11 registros de decisão de arquitetura em [`docs/decisoes/`](docs/decisoes/). |
+| Depuração e decisões | 11 bugs reais com causa e teste de regressão em [`docs/registro-de-bugs.md`](docs/registro-de-bugs.md), e 11 registros de decisão de arquitetura em [`docs/decisoes/`](docs/decisoes/). |
 
 ## Como eu construí
 
