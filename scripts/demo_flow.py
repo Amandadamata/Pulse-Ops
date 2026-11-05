@@ -159,6 +159,22 @@ class Demo:
         items: list[dict[str, Any]] = page["items"]
         return items
 
+    def settled_delivery(self, incident_id: int, event_id: str) -> dict[str, Any] | None:
+        """Entrega do evento, se já houve tentativa e o worker gravou o resultado.
+
+        O worker reserva a entrega (status 'sending', attempt_count + 1) antes de enviar e
+        só grava o resultado depois. Nesse intervalo a tentativa ainda não tem desfecho.
+        """
+        for alert in self.get(f"/incidents/{incident_id}")["alerts"]:
+            for delivery in alert["deliveries"]:
+                if (
+                    alert["event_id"] == event_id
+                    and delivery["attempt_count"] >= 1
+                    and delivery["status"] != "sending"
+                ):
+                    return dict(delivery)
+        return None
+
     # ---- laboratório -----------------------------------------------------------------
 
     def set_target(self, mode: str) -> None:
@@ -298,17 +314,14 @@ def run(demo: Demo, username: str, password: str) -> None:
     second = demo.wait_for("novo incidente aberto", lambda: demo.open_incidents(mid), 40)[0]
     event_id = f"incident:{second['id']}:opened"
 
-    def failed_delivery() -> dict[str, Any] | None:
-        for alert in demo.get(f"/incidents/{second['id']}")["alerts"]:
-            for delivery in alert["deliveries"]:
-                if alert["event_id"] == event_id and delivery["attempt_count"] >= 1:
-                    return dict(delivery)
-        return None
-
-    delivery = demo.wait_for("tentativa de entrega recusada pelo receptor", failed_delivery, 20)
+    delivery = demo.wait_for(
+        "tentativa de entrega recusada pelo receptor",
+        lambda: demo.settled_delivery(second["id"], event_id),
+        20,
+    )
     demo.expect(
         delivery["status"] == "pending" and "503" in (delivery["last_error"] or ""),
-        f"entrega pendente, último erro: {delivery['last_error']}",
+        f"status da entrega: {delivery['status']}, último erro: {delivery['last_error']}",
     )
     demo.expect(demo.received()["rejected"] > rejected_before, "receptor registrou a recusa")
 
@@ -323,15 +336,14 @@ def run(demo: Demo, username: str, password: str) -> None:
     demo.step(11, "Restaurar o receptor e ver a retentativa entregar o alerta")
     demo.set_receiver(True)
     demo.wait_for(
-        "entrega concluída",
+        "alerta chegar ao receptor",
         lambda: event_id in demo.received()["event_ids"],
         30,
     )
-    final = next(
-        d
-        for a in demo.get(f"/incidents/{second['id']}")["alerts"]
-        if a["event_id"] == event_id
-        for d in a["deliveries"]
+    final = demo.wait_for(
+        "worker gravar a entrega concluída",
+        lambda: demo.settled_delivery(second["id"], event_id),
+        20,
     )
     demo.expect(
         final["status"] == "delivered" and final["attempt_count"] >= 2,

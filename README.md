@@ -58,7 +58,7 @@ Real screenshots from the local lab (the interface is in Portuguese). The lab sc
 | Automated tests | 251 pytest tests: 133 unit tests and 118 integration tests against a real PostgreSQL. DNS, HTTP and the clock are replaced by test doubles, so the suite never touches the internet. |
 | Docker and CI | `compose.yaml` runs the database, migrations, API and worker. [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs Ruff, mypy, the tests with a coverage gate (90% overall, 95% for domain and security), migrations up and down, a dependency audit and the Docker lab. |
 | Requirements and specification | [`docs/especificacao.md`](docs/especificacao.md) and [`docs/requisitos.md`](docs/requisitos.md) define the rules with codes. [`docs/matriz-de-rastreabilidade.md`](docs/matriz-de-rastreabilidade.md) links each required scenario to the test that checks it. |
-| Debugging and decisions | 10 real bugs with cause and regression test in [`docs/registro-de-bugs.md`](docs/registro-de-bugs.md), and 11 architecture decision records in [`docs/decisoes/`](docs/decisoes/). |
+| Debugging and decisions | 11 real bugs with cause and regression test in [`docs/registro-de-bugs.md`](docs/registro-de-bugs.md), and 11 architecture decision records in [`docs/decisoes/`](docs/decisoes/). |
 
 ## How I built it
 
