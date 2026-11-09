@@ -1,4 +1,4 @@
-"""Receptor do laboratório: deduplicação por id de evento (cenário 17, lado do destino)."""
+"""Lab receiver: deduplication by event id (scenario 17, destination side)."""
 
 import httpx
 import pytest
@@ -8,7 +8,7 @@ from lab import receiver
 
 @pytest.fixture
 async def client():
-    receiver.inbox.__init__()  # estado limpo a cada teste
+    receiver.inbox.__init__()  # clean state for each test
     transport = httpx.ASGITransport(app=receiver.app)
     async with httpx.AsyncClient(transport=transport, base_url="http://lab") as c:
         yield c

@@ -14,8 +14,8 @@ def render(message: str, **extra: object) -> dict[str, object]:
 
 
 def test_query_string_and_userinfo_are_redacted() -> None:
-    text = redact_text("GET https://user:senha@api.example.com/x?token=abc&b=2 falhou")
-    assert "senha" not in text and "token=abc" not in text
+    text = redact_text("GET https://user:secret@api.example.com/x?token=abc&b=2 failed")
+    assert "secret" not in text and "token=abc" not in text
     assert "https://[redacted]@api.example.com/x?[redacted]" in text
 
 
@@ -27,11 +27,13 @@ def test_sensitive_extra_fields_are_masked() -> None:
 
 def test_context_is_added_to_every_line() -> None:
     with log_context(monitor_id=7, run_key="7:2026-01-15T12:00:00.000+00:00"):
-        line = render("check gravado")
+        line = render("check saved")
     assert line["monitor_id"] == 7 and line["run_key"].startswith("7:")
-    assert "monitor_id" not in render("fora do contexto")
+    assert "monitor_id" not in render("outside the context")
 
 
 def test_output_is_json_with_level_and_message() -> None:
-    line = render("olá %s")
-    assert line["level"] == "INFO" and line["msg"] == "olá %s" and line["logger"] == "pulseops.test"
+    line = render("hello %s")
+    assert (
+        line["level"] == "INFO" and line["msg"] == "hello %s" and line["logger"] == "pulseops.test"
+    )

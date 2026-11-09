@@ -1,4 +1,4 @@
-"""Consultas de leitura: histórico (RF04), métricas (RF05) e estado do worker (RF09)."""
+"""Read queries: history (RF04), metrics (RF05) and worker status (RF09)."""
 
 import base64
 import binascii
@@ -29,7 +29,7 @@ DEFAULT_PAGE_SIZE = 50
 STALE_GRACE = timedelta(seconds=30)
 
 
-# ---- paginação por cursor ----------------------------------------------------------
+# ---- cursor pagination ---------------------------------------------------------------
 
 
 def encode_cursor(moment: datetime, row_id: int) -> str:
@@ -43,10 +43,10 @@ def decode_cursor(cursor: str) -> tuple[datetime, int]:
         moment_text, id_text = base64.urlsafe_b64decode(padded).decode().split("|")
         moment = datetime.fromisoformat(moment_text)
         if moment.tzinfo is None:
-            raise ValueError("cursor sem fuso")
+            raise ValueError("cursor without a timezone")
         return moment, int(id_text)
     except (ValueError, UnicodeDecodeError, binascii.Error) as exc:
-        raise ValueError("cursor inválido") from exc
+        raise ValueError("invalid cursor") from exc
 
 
 @dataclass
@@ -55,7 +55,7 @@ class Page[T]:
     next_cursor: str | None
 
 
-# ---- worker e "dados desatualizados" ----------------------------------------------
+# ---- worker and "stale data" -----------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -74,7 +74,7 @@ async def worker_status(session: AsyncSession, *, now: datetime, stale_after: in
 
 
 def is_stale(monitor: Monitor, *, now: datetime, worker: WorkerStatus) -> bool:
-    """Dados desatualizados (RF03): worker sem sinal ou último check velho demais."""
+    """Stale data (RF03): no signal from the worker or the last check is too old."""
     if monitor.state != "active":
         return False
     if not worker.alive:
@@ -84,7 +84,7 @@ def is_stale(monitor: Monitor, *, now: datetime, worker: WorkerStatus) -> bool:
     return now - reference > limit
 
 
-# ---- monitores e resumo -------------------------------------------------------------
+# ---- monitors and summary -----------------------------------------------------------
 
 
 async def list_monitors(session: AsyncSession, *, include_archived: bool = False) -> list[Monitor]:
@@ -122,7 +122,7 @@ async def summary(session: AsyncSession, *, now: datetime, worker: WorkerStatus)
     return result
 
 
-# ---- histórico -----------------------------------------------------------------------
+# ---- history -------------------------------------------------------------------------
 
 
 async def list_checks(
@@ -135,7 +135,7 @@ async def list_checks(
     end: datetime | None = None,
     outcome: str | None = None,
 ) -> Page[Check]:
-    """Checks concluídos, mais recentes primeiro, ordem estável (started_at, id)."""
+    """Finished checks, newest first, in a stable order (started_at, id)."""
     limit = max(1, min(limit, MAX_PAGE_SIZE))
     query = select(Check).where(Check.monitor_id == monitor_id, Check.status == "completed")
     if start is not None:
@@ -163,7 +163,7 @@ async def list_incidents(
     query: Select[Incident, Monitor] = select(Incident, Monitor).join(
         Monitor, Monitor.id == Incident.monitor_id
     )
-    if status == "closed":  # "encerrados" na interface = resolvidos ou fechados
+    if status == "closed":  # "closed" in the interface = resolved or closed
         query = query.where(Incident.status != "open")
     elif status is not None:
         query = query.where(Incident.status == status)
@@ -290,7 +290,7 @@ async def health_changes(
     )
 
 
-# ---- métricas ------------------------------------------------------------------------
+# ---- metrics -------------------------------------------------------------------------
 
 RESPONSE_OUTCOMES = ("healthy", "slow", "unexpected_status")
 
@@ -299,7 +299,7 @@ RESPONSE_OUTCOMES = ("healthy", "slow", "unexpected_status")
 class Metrics:
     start: datetime
     end: datetime
-    evaluated: int  # N: checks na janela, sem erros internos
+    evaluated: int  # N: checks in the window, without internal errors
     internal_errors: int
     by_outcome: dict[str, int]
     available_pct: float | None
@@ -316,7 +316,7 @@ class Metrics:
 async def monitor_metrics(
     session: AsyncSession, monitor_id: int, *, start: datetime, end: datetime, now: datetime
 ) -> Metrics:
-    """Fórmulas em docs/requisitos.md (RF05). Janela [start, end)."""
+    """Formulas in docs/requisitos.md (RF05). Window [start, end)."""
     in_window = (
         Check.monitor_id == monitor_id,
         Check.status == "completed",
@@ -331,8 +331,8 @@ async def monitor_metrics(
     evaluated = sum(by_outcome.values()) - internal
     available = by_outcome.get("healthy", 0) + by_outcome.get("slow", 0)
 
-    # percentile_disc(0.95) devolve o primeiro valor com distribuição acumulada >= 0,95:
-    # é o mesmo resultado do nearest-rank (ADR 0011).
+    # percentile_disc(0.95) returns the first value whose cumulative distribution is >= 0.95:
+    # the same result as nearest-rank (ADR 0011).
     latency = (
         await session.execute(
             select(
@@ -403,7 +403,7 @@ class LatencyPoint:
 async def latency_series(
     session: AsyncSession, monitor_id: int, *, start: datetime, end: datetime, limit: int = 300
 ) -> list[LatencyPoint]:
-    """Pontos do gráfico: os `limit` checks mais recentes da janela, em ordem cronológica."""
+    """Chart points: the `limit` most recent checks in the window, in chronological order."""
     rows = (
         await session.execute(
             select(Check.started_at, Check.duration_ms, Check.outcome)

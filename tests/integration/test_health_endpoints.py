@@ -1,4 +1,4 @@
-"""RF09: liveness e readiness."""
+"""RF09: liveness and readiness."""
 
 import httpx
 

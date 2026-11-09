@@ -1,4 +1,4 @@
-"""Cenário 24: retenção apaga checks antigos e preserva incidentes."""
+"""Scenario 24: retention deletes old checks and keeps incidents."""
 
 from datetime import timedelta
 
@@ -22,7 +22,7 @@ async def test_old_checks_are_purged_and_incidents_kept(
     await tick(worker, clock)
     clock.advance(timedelta(days=31).total_seconds())
     target.mode = "ok"
-    await tick(worker, clock)  # um check recente
+    await tick(worker, clock)  # one recent check
 
     removed = await purge_old_checks(sessions, now=clock.now(), retention_days=30)
     assert removed == 1
@@ -32,9 +32,9 @@ async def test_old_checks_are_purged_and_incidents_kept(
         changes = list(
             await session.scalars(select(HealthChange).where(HealthChange.monitor_id == monitor.id))
         )
-    assert incident.last_check_id is None  # referência ao check apagado vira nula
-    assert incident.opening_reason.startswith("Incidente confirmado")  # explicação preservada
-    # A mudança "sem dados → indisponível" continua registrada; o check dela já foi apagado.
+    assert incident.last_check_id is None  # the reference to the deleted check becomes null
+    assert incident.opening_reason.startswith("Incident confirmed")  # explanation kept
+    # The "no data -> down" change is still recorded; its check was already deleted.
     assert [(c.to_health, c.check_id) for c in changes] == [("down", None)]
 
 

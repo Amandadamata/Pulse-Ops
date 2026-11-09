@@ -1,4 +1,4 @@
-"""Fórmulas das métricas (RF05). As consultas ficam em services/queries.py."""
+"""Metric formulas (RF05). The queries live in services/queries.py."""
 
 import math
 from collections.abc import Sequence
@@ -6,12 +6,12 @@ from datetime import datetime, timedelta
 
 
 def nearest_rank(values: Sequence[float], percentile: float) -> float | None:
-    """Percentil pelo método nearest-rank: valor na posição ceil(p/100 × n), 1-indexada.
+    """Percentile by the nearest-rank method: the value at position ceil(p/100 x n), 1-indexed.
 
-    Devolve None quando não há amostras, para a interface mostrar "N/A".
+    Returns None when there are no samples, so the interface shows "N/A".
     """
     if not 0 < percentile <= 100:
-        raise ValueError("percentil deve estar em (0, 100]")
+        raise ValueError("percentile must be in (0, 100]")
     if not values:
         return None
     ordered = sorted(values)
@@ -20,7 +20,7 @@ def nearest_rank(values: Sequence[float], percentile: float) -> float | None:
 
 
 def ratio(part: int, total: int) -> float | None:
-    """Proporção em porcentagem, ou None quando não há base (nunca inventa 0% ou 100%)."""
+    """Ratio as a percentage, or None when there is no base (it never invents 0% or 100%)."""
     if total <= 0:
         return None
     return 100.0 * part / total
@@ -33,9 +33,9 @@ def clipped_duration(
     ended_at: datetime | None,
     now: datetime,
 ) -> timedelta:
-    """Parte de um incidente que cai dentro da janela [início, fim).
+    """The part of an incident that falls inside the window [start, end).
 
-    Incidente ainda aberto conta até `now` (ou até o fim da janela, o que vier antes).
+    An incident that is still open counts until `now` (or the end of the window, if earlier).
     """
     end = min(window_end, ended_at or now)
     start = max(window_start, started_at)

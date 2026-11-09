@@ -1,8 +1,8 @@
-"""Tabelas do PulseOps (SQLAlchemy 2.x, estilo `Mapped[...]`).
+"""PulseOps tables (SQLAlchemy 2.x, `Mapped[...]` style).
 
-Restrições que protegem regras de negócio ficam aqui e na migração, para que o
-banco garanta o que a aplicação promete (por exemplo, um incidente aberto por
-monitor), mesmo que exista um bug no código Python.
+Constraints that protect business rules live here and in the migration, so the
+database guarantees what the application promises (for example, one open incident
+per monitor) even if there is a bug in the Python code.
 """
 
 from datetime import datetime
@@ -26,7 +26,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-# Nomes previsíveis para constraints: facilitam migrações e mensagens de erro.
+# Predictable constraint names: they make migrations and error messages easier.
 NAMING = {
     "ix": "ix_%(column_0_label)s",
     "uq": "uq_%(table_name)s_%(column_0_name)s",
@@ -54,7 +54,7 @@ class Operator(Base):
 class OperatorSession(Base):
     __tablename__ = "operator_sessions"
 
-    # SHA-256 do token do cookie, em hexadecimal. O token em si nunca é gravado.
+    # SHA-256 of the cookie token, in hex. The token itself is never stored.
     token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
     operator_id: Mapped[int] = mapped_column(ForeignKey("operators.id", ondelete="CASCADE"))
     csrf_token: Mapped[str] = mapped_column(String(64))
@@ -70,8 +70,8 @@ class Monitor(Base):
         CheckConstraint(
             "health IN ('no_data', 'healthy', 'degraded', 'down', 'paused')", name="health"
         ),
-        # Limites absolutos. O mínimo de 30 s do modo normal é validado na aplicação,
-        # porque o modo demonstração permite 2 s.
+        # Absolute limits. The 30 s minimum of normal mode is checked in the application,
+        # because demo mode allows 2 s.
         CheckConstraint("interval_seconds BETWEEN 2 AND 86400", name="interval"),
         CheckConstraint("timeout_seconds BETWEEN 1 AND 30", name="timeout"),
         CheckConstraint("timeout_seconds < interval_seconds", name="timeout_lt_interval"),
@@ -84,14 +84,14 @@ class Monitor(Base):
             "consecutive_failures >= 0 AND consecutive_successes >= 0", name="counters"
         ),
         CheckConstraint("(state = 'archived') = (archived_at IS NOT NULL)", name="archived_at"),
-        # Nome único entre monitores não arquivados, sem diferenciar maiúsculas (RF01.7).
+        # Unique name among non-archived monitors, case-insensitive (RF01.7).
         Index(
             "uq_monitors_active_name",
             func.lower(text("name")),
             unique=True,
             postgresql_where=text("state <> 'archived'"),
         ),
-        # Consulta do agendador: monitores ativos com next_run_at vencido.
+        # Scheduler query: active monitors whose next_run_at is due.
         Index(
             "ix_monitors_due",
             "next_run_at",
@@ -113,7 +113,7 @@ class Monitor(Base):
 
     state: Mapped[str] = mapped_column(String(10), default="active")
     health: Mapped[str] = mapped_column(String(10), default="no_data")
-    health_reason: Mapped[str] = mapped_column(Text, default="Ainda sem verificações.")
+    health_reason: Mapped[str] = mapped_column(Text, default="No checks yet.")
     health_changed_at: Mapped[datetime] = mapped_column(Timestamp)
     consecutive_failures: Mapped[int] = mapped_column(Integer, default=0)
     consecutive_successes: Mapped[int] = mapped_column(Integer, default=0)
@@ -121,7 +121,7 @@ class Monitor(Base):
     config_version: Mapped[int] = mapped_column(Integer, default=1)
 
     next_run_at: Mapped[datetime | None] = mapped_column(Timestamp)
-    # "Verificar agora" pedido pelo operador; o próximo check é marcado como manual (CB5).
+    # "Check now" requested by the operator; the next check is marked as manual (CB5).
     check_requested: Mapped[bool] = mapped_column(Boolean, default=False)
     last_check_at: Mapped[datetime | None] = mapped_column(Timestamp)
     created_at: Mapped[datetime] = mapped_column(Timestamp)
@@ -144,22 +144,22 @@ class Check(Base):
             "(status = 'completed' AND outcome IS NOT NULL AND finished_at IS NOT NULL)",
             name="completed_has_outcome",
         ),
-        # No máximo um check em andamento por monitor: o banco impede sobreposição (CB3).
+        # At most one check in progress per monitor: the database prevents overlap (CB3).
         Index(
             "uq_checks_one_running_per_monitor",
             "monitor_id",
             unique=True,
             postgresql_where=text("status = 'running'"),
         ),
-        # Histórico de um monitor, mais recente primeiro, com desempate por id (RF04.1).
+        # A monitor's history, newest first, with id as the tiebreaker (RF04.1).
         Index("ix_checks_monitor_history", "monitor_id", "started_at", "id"),
-        # Retenção: apagar checks antigos de todos os monitores (CB6).
+        # Retention: delete old checks from every monitor (CB6).
         Index("ix_checks_started_at", "started_at"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     monitor_id: Mapped[int] = mapped_column(ForeignKey("monitors.id", ondelete="RESTRICT"))
-    # Identidade da execução agendada: "{monitor_id}:{scheduled_at ISO UTC}".
+    # Identity of the scheduled run: "{monitor_id}:{scheduled_at ISO UTC}".
     run_key: Mapped[str] = mapped_column(String(80), unique=True)
     trigger: Mapped[str] = mapped_column(String(10), default="scheduled")
     status: Mapped[str] = mapped_column(String(10), default="running")
@@ -179,17 +179,17 @@ class Incident(Base):
         CheckConstraint("status IN ('open', 'resolved', 'closed')", name="status"),
         CheckConstraint("(status = 'open') = (ended_at IS NULL)", name="ended_when_not_open"),
         CheckConstraint("started_at <= confirmed_at", name="started_before_confirmed"),
-        # Um incidente aberto por monitor, garantido pelo banco (RF03.11).
+        # One open incident per monitor, guaranteed by the database (RF03.11).
         Index(
             "uq_incidents_one_open_per_monitor",
             "monitor_id",
             unique=True,
             postgresql_where=text("status = 'open'"),
         ),
-        # Lista de incidentes (geral e por monitor), mais recentes primeiro.
+        # Incident list (overall and per monitor), newest first.
         Index("ix_incidents_confirmed", "confirmed_at", "id"),
         Index("ix_incidents_monitor", "monitor_id", "confirmed_at"),
-        # A retenção apaga checks; o banco precisa achar quem aponta para eles (SET NULL).
+        # Retention deletes checks; the database must find the rows that point to them (SET NULL).
         Index("ix_incidents_last_check", "last_check_id"),
     )
 
@@ -199,7 +199,7 @@ class Incident(Base):
     started_at: Mapped[datetime] = mapped_column(Timestamp)
     confirmed_at: Mapped[datetime] = mapped_column(Timestamp)
     ended_at: Mapped[datetime | None] = mapped_column(Timestamp)
-    # Retrato da configuração no momento da abertura (RF03.12).
+    # Snapshot of the configuration when the incident opened (RF03.12).
     failure_threshold: Mapped[int] = mapped_column(Integer)
     recovery_threshold: Mapped[int] = mapped_column(Integer)
     timeout_seconds: Mapped[int] = mapped_column(Integer)
@@ -257,7 +257,7 @@ class HealthChange(Base):
 
 
 class CoverageGap(Base):
-    """Período em que checks previstos não foram executados (worker parado ou atrasado)."""
+    """Period in which expected checks did not run (worker stopped or late)."""
 
     __tablename__ = "coverage_gaps"
     __table_args__ = (
@@ -284,7 +284,7 @@ class AlertDestination(Base):
 
 
 class AlertEvent(Base):
-    """Outbox: criado na mesma transação da mudança de incidente (RF06.1)."""
+    """Outbox: created in the same transaction as the incident change (RF06.1)."""
 
     __tablename__ = "alert_events"
     __table_args__ = (
@@ -292,12 +292,12 @@ class AlertEvent(Base):
             "kind IN ('incident.opened', 'incident.resolved', 'incident.closed')", name="kind"
         ),
         Index("ix_alert_events_created", "created_at", "id"),
-        # Notificações de um incidente, na página do incidente.
+        # An incident's notifications, shown on the incident page.
         Index("ix_alert_events_incident", "incident_id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    # Chave estável "incident:{id}:{tipo}". Também é o event_id enviado ao destino.
+    # Stable key "incident:{id}:{type}". It is also the event_id sent to the destination.
     event_key: Mapped[str] = mapped_column(String(80), unique=True)
     kind: Mapped[str] = mapped_column(String(30))
     incident_id: Mapped[int] = mapped_column(ForeignKey("incidents.id", ondelete="RESTRICT"))
@@ -312,7 +312,7 @@ class Delivery(Base):
         UniqueConstraint("event_id", "destination_id", name="uq_deliveries_event_destination"),
         CheckConstraint("status IN ('pending', 'sending', 'delivered', 'failed')", name="status"),
         CheckConstraint("attempt_count >= 0", name="attempts"),
-        # Consulta do entregador: entregas pendentes (ou com reserva vencida) por horário.
+        # Deliverer query: pending deliveries (or expired reservations) by time.
         Index(
             "ix_deliveries_due",
             "next_attempt_at",
@@ -327,7 +327,7 @@ class Delivery(Base):
     )
     status: Mapped[str] = mapped_column(String(10), default="pending")
     attempt_count: Mapped[int] = mapped_column(Integer, default=0)
-    # Para 'pending': quando tentar. Para 'sending': até quando vale a reserva.
+    # For 'pending': when to try. For 'sending': until when the reservation holds.
     next_attempt_at: Mapped[datetime] = mapped_column(Timestamp)
     last_error: Mapped[str | None] = mapped_column(String(300))
     delivered_at: Mapped[datetime | None] = mapped_column(Timestamp)

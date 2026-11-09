@@ -1,4 +1,4 @@
-"""Casos de uso do cadastro de monitores (RF01)."""
+"""Monitor registration use cases (RF01)."""
 
 from dataclasses import asdict
 from datetime import datetime
@@ -38,7 +38,7 @@ async def _validate(
     if exclude_id is not None:
         duplicate = duplicate.where(Monitor.id != exclude_id)
     if await session.scalar(duplicate):
-        errors.append(FieldError("name", "já existe um monitor com este nome"))
+        errors.append(FieldError("name", "a monitor with this name already exists"))
 
     if errors:
         raise ValidationFailedError(errors)
@@ -63,22 +63,22 @@ async def create_monitor(
         **values,
         state="active",
         health=Health.NO_DATA,
-        health_reason="Ainda sem verificações.",
+        health_reason="No checks yet.",
         health_changed_at=now,
         consecutive_failures=0,
         consecutive_successes=0,
         config_version=1,
         check_requested=False,
-        next_run_at=now,  # primeira verificação logo após o cadastro
+        next_run_at=now,  # first check right after registration
         created_at=now,
         updated_at=now,
     )
     session.add(monitor)
     try:
         await session.flush()
-    except IntegrityError as exc:  # corrida entre dois cadastros com o mesmo nome
+    except IntegrityError as exc:  # race between two registrations with the same name
         raise ValidationFailedError(
-            [FieldError("name", "já existe um monitor com este nome")]
+            [FieldError("name", "a monitor with this name already exists")]
         ) from exc
     return monitor
 
@@ -86,7 +86,7 @@ async def create_monitor(
 async def get_monitor(session: AsyncSession, monitor_id: int, *, lock: bool = False) -> Monitor:
     monitor = await session.get(Monitor, monitor_id, with_for_update=lock)
     if monitor is None:
-        raise NotFoundError(f"monitor {monitor_id} não encontrado")
+        raise NotFoundError(f"monitor {monitor_id} not found")
     return monitor
 
 
@@ -117,7 +117,7 @@ async def update_monitor(
 ) -> Monitor:
     monitor = await get_monitor(session, monitor_id, lock=True)
     if monitor.state == "archived":
-        raise ConflictError("monitor arquivado não pode ser editado")
+        raise ConflictError("an archived monitor cannot be edited")
     await _validate(
         session,
         config,
@@ -137,7 +137,7 @@ async def update_monitor(
     monitor.updated_at = now
 
     if changed_check_fields:
-        # RF03.5: a configuração mudou o significado dos contadores; recomeça a contagem.
+        # RF03.5: the configuration changed what the counters mean; counting starts over.
         monitor.config_version += 1
         monitor.consecutive_failures = 0
         monitor.consecutive_successes = 0
@@ -169,8 +169,8 @@ def _set_health(
 
 
 def _reset_counters(monitor: Monitor) -> None:
-    # Nova versão também invalida checks que já estavam em andamento: se o monitor for
-    # retomado antes de eles terminarem, o resultado fica no histórico sem efeito (B6).
+    # A new version also invalidates checks already in progress: if the monitor is
+    # resumed before they finish, the result stays in the history with no effect (B6).
     monitor.config_version += 1
     monitor.consecutive_failures = 0
     monitor.consecutive_successes = 0
@@ -180,21 +180,21 @@ def _reset_counters(monitor: Monitor) -> None:
 async def pause_monitor(session: AsyncSession, monitor_id: int, *, now: datetime) -> Monitor:
     monitor = await get_monitor(session, monitor_id, lock=True)
     if monitor.state != "active":
-        raise ConflictError("apenas monitores ativos podem ser pausados")
+        raise ConflictError("only active monitors can be paused")
     await incidents.close_incident_by_operator(session, monitor=monitor, action="paused", now=now)
     monitor.state = "paused"
     monitor.next_run_at = None
     monitor.check_requested = False
     monitor.updated_at = now
     _reset_counters(monitor)
-    _set_health(session, monitor, Health.PAUSED, "Monitor pausado pelo operador.", now)
+    _set_health(session, monitor, Health.PAUSED, "Monitor paused by the operator.", now)
     return monitor
 
 
 async def resume_monitor(session: AsyncSession, monitor_id: int, *, now: datetime) -> Monitor:
     monitor = await get_monitor(session, monitor_id, lock=True)
     if monitor.state != "paused":
-        raise ConflictError("apenas monitores pausados podem ser retomados")
+        raise ConflictError("only paused monitors can be resumed")
     monitor.state = "active"
     monitor.next_run_at = now
     monitor.updated_at = now
@@ -203,17 +203,17 @@ async def resume_monitor(session: AsyncSession, monitor_id: int, *, now: datetim
         session,
         monitor,
         Health.NO_DATA,
-        "Monitor retomado; aguardando a primeira verificação.",
+        "Monitor resumed; waiting for the first check.",
         now,
     )
     return monitor
 
 
 async def archive_monitor(session: AsyncSession, monitor_id: int, *, now: datetime) -> Monitor:
-    """Arquiva sem apagar nada: checks, incidentes e alertas continuam consultáveis (RF01.8)."""
+    """Archives without deleting anything: checks, incidents and alerts stay visible (RF01.8)."""
     monitor = await get_monitor(session, monitor_id, lock=True)
     if monitor.state == "archived":
-        raise ConflictError("monitor já arquivado")
+        raise ConflictError("monitor already archived")
     await incidents.close_incident_by_operator(session, monitor=monitor, action="archived", now=now)
     monitor.state = "archived"
     monitor.archived_at = now
@@ -221,16 +221,16 @@ async def archive_monitor(session: AsyncSession, monitor_id: int, *, now: dateti
     monitor.check_requested = False
     monitor.updated_at = now
     _reset_counters(monitor)
-    _set_health(session, monitor, Health.PAUSED, "Monitor arquivado pelo operador.", now)
+    _set_health(session, monitor, Health.PAUSED, "Monitor archived by the operator.", now)
     return monitor
 
 
 async def request_check_now(session: AsyncSession, monitor_id: int, *, now: datetime) -> Monitor:
-    """Antecipa a próxima execução. A reserva continua passando pelo mesmo controle de
-    sobreposição; se já houver um check em andamento, este espera ele terminar (CB5)."""
+    """Brings the next run forward. The reservation still goes through the same overlap
+    control; if a check is already in progress, this one waits for it to finish (CB5)."""
     monitor = await get_monitor(session, monitor_id, lock=True)
     if monitor.state != "active":
-        raise ConflictError("apenas monitores ativos podem ser verificados")
+        raise ConflictError("only active monitors can be checked")
     monitor.next_run_at = now
     monitor.check_requested = True
     return monitor

@@ -1,4 +1,4 @@
-"""Roteiro do laboratório: ler a entrega enquanto o worker ainda envia (B11)."""
+"""Lab script: reading the delivery while the worker is still sending (B11)."""
 
 from typing import Any
 
@@ -17,7 +17,7 @@ DELIVERED = {"status": "delivered", "attempt_count": 2, "last_error": None}
 
 
 def demo_reading(*deliveries: dict[str, Any]) -> Demo:
-    """Demo cuja API devolve, a cada leitura do incidente, o próximo estado da entrega."""
+    """Demo whose API returns, on each incident read, the next delivery state."""
     states = iter(deliveries)
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -39,8 +39,11 @@ def test_attempt_without_recorded_result_is_not_settled(state: dict[str, Any]) -
 @pytest.mark.parametrize(
     ("states", "expected"),
     [
-        ((BEING_SENT, REFUSED), REFUSED),  # passo 9: a corrida que derrubou o CI
-        ((RETRYING, DELIVERED), DELIVERED),  # passo 11: receptor já recebeu, worker não gravou
+        ((BEING_SENT, REFUSED), REFUSED),  # step 9: the race that broke CI
+        (
+            (RETRYING, DELIVERED),
+            DELIVERED,
+        ),  # step 11: the receiver already got it, the worker has not saved it
     ],
 )
 def test_waits_for_the_worker_to_record_the_attempt(

@@ -1,6 +1,6 @@
 # Ensaio de carga local
 
-Gerado por `scripts/ensaio_carga.sh --monitors 200 --interval 10 --duration 120` em 2026-10-22T03:53Z.
+Gerado por `scripts/load_test.sh --monitors 200 --interval 10 --duration 120` em 2026-10-22T03:53Z.
 Commit base: `e8d69d9`, com a correção do B8 aplicada (commitada logo em seguida).
 
 ## Máquina

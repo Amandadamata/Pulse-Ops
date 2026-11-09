@@ -1,9 +1,9 @@
-"""Transporte HTTPX que só conecta em IPs aprovados pela política (ADR 0005).
+"""HTTPX transport that only connects to IPs approved by the policy (ADR 0005).
 
-O `httpcore` chama `connect_tcp(host, porta)` do *network backend* para abrir cada
-conexão. Este backend resolve o nome, valida todos os IPs e conecta no IP
-validado. O `httpcore` continua usando o nome original no header Host, no SNI e
-na verificação do certificado, porque esses valores vêm da URL e não do socket.
+`httpcore` calls the *network backend*'s `connect_tcp(host, port)` to open each
+connection. This backend resolves the name, validates every IP and connects to the
+validated IP. `httpcore` keeps using the original name in the Host header, in SNI and
+in certificate verification, because those values come from the URL, not the socket.
 """
 
 import asyncio
@@ -25,7 +25,7 @@ class Resolver(Protocol):
 class SystemResolver:
     async def resolve(self, host: str, port: int) -> list[IPAddress]:
         loop = asyncio.get_running_loop()
-        # getaddrinfo do loop roda em thread separada: não bloqueia o event loop.
+        # The loop's getaddrinfo runs in a separate thread: it does not block the event loop.
         infos = await loop.getaddrinfo(host, port, type=socket.SOCK_STREAM)
         return [ipaddress.ip_address(info[4][0]) for info in infos]
 
@@ -45,11 +45,11 @@ class GuardedNetworkBackend(httpcore.AsyncNetworkBackend):
         try:
             addresses = await self._resolver.resolve(host, port)
         except OSError as exc:
-            raise httpcore.ConnectError(f"não foi possível resolver o nome: {exc}") from exc
+            raise httpcore.ConnectError(f"could not resolve the name: {exc}") from exc
         if not addresses:
-            raise httpcore.ConnectError("o nome não tem endereços")
-        # Se qualquer endereço for proibido, recusa: evita escolher "o IP bom" de uma
-        # resposta que mistura um IP público com um interno.
+            raise httpcore.ConnectError("the name has no addresses")
+        # If any address is forbidden, refuse: this avoids picking "the good IP" from an
+        # answer that mixes a public IP with an internal one.
         for address in addresses:
             self._policy.check_address(host, port, address)
         return addresses[0]
@@ -58,7 +58,7 @@ class GuardedNetworkBackend(httpcore.AsyncNetworkBackend):
         self,
         host: str,
         port: int,
-        timeout: float | None = None,  # noqa: ASYNC109 - assinatura do httpcore
+        timeout: float | None = None,  # noqa: ASYNC109 - httpcore signature
         local_address: str | None = None,
         socket_options: Iterable[Any] | None = None,
     ) -> httpcore.AsyncNetworkStream:
@@ -70,10 +70,10 @@ class GuardedNetworkBackend(httpcore.AsyncNetworkBackend):
     async def connect_unix_socket(
         self,
         path: str,
-        timeout: float | None = None,  # noqa: ASYNC109 - assinatura do httpcore
+        timeout: float | None = None,  # noqa: ASYNC109 - httpcore signature
         socket_options: Iterable[Any] | None = None,
     ) -> httpcore.AsyncNetworkStream:
-        raise UnsafeDestinationError("sockets Unix não são permitidos")
+        raise UnsafeDestinationError("Unix sockets are not allowed")
 
     async def sleep(self, seconds: float) -> None:
         await self._inner.sleep(seconds)
@@ -86,10 +86,10 @@ def build_guarded_client(
     user_agent: str,
     resolver: Resolver | None = None,
 ) -> httpx.AsyncClient:
-    """Cliente HTTPX com o backend protegido, sem proxy do ambiente e sem redirecionamentos."""
+    """HTTPX client with the protected backend, no proxy from the environment and no redirects."""
     transport = httpx.AsyncHTTPTransport(trust_env=False, retries=0)
-    # Detalhe interno do HTTPX 0.28: o transporte delega ao pool em `_pool`. Trocamos o
-    # pool por um com o nosso backend. tests/unit/test_transport.py quebra se isso mudar.
+    # HTTPX 0.28 internal detail: the transport delegates to the pool in `_pool`. We swap the
+    # pool for one with our backend. tests/unit/test_transport.py breaks if this changes.
     transport._pool = httpcore.AsyncConnectionPool(
         ssl_context=httpx.create_ssl_context(trust_env=False),
         max_connections=max_connections,
@@ -107,10 +107,10 @@ def build_guarded_client(
 async def validate_destination(
     policy: DestinationPolicy, url: str, resolver: Resolver | None = None
 ) -> None:
-    """Validação de cadastro: texto da URL e, se o nome resolver, os IPs atuais.
+    """Validation when registering: the URL text and, if the name resolves, the current IPs.
 
-    Um nome que não resolve agora é aceito (o serviço pode estar fora do ar); a
-    proteção definitiva acontece de novo em cada conexão.
+    A name that does not resolve right now is accepted (the service may be down); the
+    real protection happens again on every connection.
     """
     destination = policy.validate_url(url)
     if policy.is_demo_host(destination.host, destination.port):

@@ -1,4 +1,4 @@
-"""Configuração lida de variáveis de ambiente com prefixo PULSEOPS_."""
+"""Configuration read from environment variables with the PULSEOPS_ prefix."""
 
 from functools import cached_property
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     demo_mode: bool = False
-    # Pares host:porta separados por vírgula. Só têm efeito com demo_mode ligado.
+    # Comma-separated host:port pairs. They only take effect with demo_mode on.
     demo_allowed_hosts: str = ""
     allowed_ports: str = "80,443,8080,8443"
 
@@ -37,12 +37,12 @@ class Settings(BaseSettings):
     @field_validator("display_timezone")
     @classmethod
     def _known_timezone(cls, value: str) -> str:
-        # ZoneInfoNotFoundError herda de KeyError, que o Pydantic não converte em erro de
-        # validação; por isso a conversão explícita para ValueError.
+        # ZoneInfoNotFoundError inherits from KeyError, which Pydantic does not turn into a
+        # validation error; hence the explicit conversion to ValueError.
         try:
             ZoneInfo(value)
         except (ZoneInfoNotFoundError, ValueError) as exc:
-            raise ValueError(f"fuso horário desconhecido: {value}") from exc
+            raise ValueError(f"unknown timezone: {value}") from exc
         return value
 
     @cached_property
@@ -55,7 +55,7 @@ class Settings(BaseSettings):
 
     @cached_property
     def demo_allowlist(self) -> frozenset[tuple[str, int]]:
-        """Hosts nominais liberados para o laboratório. Vazio fora do modo demo."""
+        """Host names allowed for the lab. Empty outside demo mode."""
         if not self.demo_mode:
             return frozenset()
         pairs = set()

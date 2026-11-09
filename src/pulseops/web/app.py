@@ -1,4 +1,4 @@
-"""Fábrica da aplicação FastAPI (API JSON + dashboard)."""
+"""FastAPI application factory (JSON API + dashboard)."""
 
 import logging
 from collections.abc import AsyncIterator
@@ -34,7 +34,7 @@ def create_app(
     clock: Clock | None = None,
     resolver: Resolver | None = None,
 ) -> FastAPI:
-    """Os testes passam `sessions`, `clock` e `resolver`; em produção tudo vem das variáveis."""
+    """Tests pass `sessions`, `clock` and `resolver`; in production they come from the variables."""
     settings = settings or Settings()
 
     @asynccontextmanager
@@ -60,7 +60,7 @@ def create_app(
         title="PulseOps",
         version=__version__,
         lifespan=lifespan,
-        # A documentação interativa fica desligada: a API é de uso do próprio operador.
+        # Interactive docs are turned off: the API is for the operator's own use.
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
@@ -76,17 +76,17 @@ def create_app(
 
     @app.exception_handler(StarletteHTTPException)
     async def http_error(request: Request, exc: StarletteHTTPException) -> Response:
-        """Na API, JSON; nas páginas, uma página de erro legível (sem detalhes internos)."""
+        """JSON for the API; a readable error page for pages (without internal details)."""
         if request.url.path.startswith(("/api/", "/health/")):
             return JSONResponse(
                 {"detail": exc.detail}, status_code=exc.status_code, headers=exc.headers
             )
-        titles = {403: "Acesso negado", 404: "Página não encontrada", 409: "Operação não permitida"}
+        titles = {403: "Access denied", 404: "Page not found", 409: "Operation not allowed"}
         return templates.TemplateResponse(
             request,
             "error.html",
             {
-                "title": titles.get(exc.status_code, "Erro"),
+                "title": titles.get(exc.status_code, "Error"),
                 "message": str(exc.detail),
                 "tz": settings.timezone,
                 "tz_name": settings.display_timezone,
@@ -97,15 +97,15 @@ def create_app(
 
     @app.exception_handler(DBAPIError)
     async def database_unavailable(request: Request, exc: DBAPIError) -> Response:
-        logger.error("erro de banco ao atender requisição", extra={"path": request.url.path})
+        logger.error("database error while handling a request", extra={"path": request.url.path})
         if request.url.path.startswith("/api/"):
-            return JSONResponse({"detail": "banco de dados indisponível"}, status_code=503)
+            return JSONResponse({"detail": "database unavailable"}, status_code=503)
         return templates.TemplateResponse(
             request,
             "error.html",
             {
-                "title": "Banco de dados indisponível",
-                "message": "Tente novamente em instantes.",
+                "title": "Database unavailable",
+                "message": "Please try again in a moment.",
                 "tz": settings.timezone,
                 "tz_name": settings.display_timezone,
                 "demo_mode": settings.demo_mode,

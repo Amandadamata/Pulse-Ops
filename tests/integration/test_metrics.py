@@ -1,4 +1,4 @@
-"""Cenário 19: métricas sem dados e p95 com amostra pequena (RF05)."""
+"""Scenario 19: metrics without data and p95 with a small sample (RF05)."""
 
 import random
 from datetime import timedelta
@@ -22,7 +22,7 @@ async def test_no_data_returns_na_not_zero_or_hundred(
     assert metrics["available_checks_pct"] is None and metrics["healthy_checks_pct"] is None
     assert metrics["latency_avg_ms"] is None and metrics["latency_p95_ms"] is None
     page = await api.get(f"/monitors/{monitor.id}")
-    assert "N/A" in page.text and "Sem checks nesta janela" in page.text
+    assert "N/A" in page.text and "No checks in this window" in page.text
 
 
 async def test_formulas_and_denominators(sessions: SessionFactory, clock: FakeClock) -> None:
@@ -42,18 +42,18 @@ async def test_formulas_and_denominators(sessions: SessionFactory, clock: FakeCl
     async with sessions() as session:
         end = START + timedelta(hours=1)
         m = await queries.monitor_metrics(session, monitor.id, start=START, end=end, now=end)
-    assert m.evaluated == 4 and m.internal_errors == 1  # erro interno fora do denominador
+    assert m.evaluated == 4 and m.internal_errors == 1  # internal error left out of the denominator
     assert m.available_pct == 75.0  # healthy + slow sobre 4
     assert m.healthy_pct == 50.0
-    assert m.latency_samples == 3  # timeout não entra na latência
+    assert m.latency_samples == 3  # timeout does not count toward latency
     assert m.latency_avg_ms == (100 + 300 + 1500) / 3
-    assert m.latency_p95_ms == 1500  # n = 3 → p95 é o máximo
+    assert m.latency_p95_ms == 1500  # n = 3 -> p95 is the maximum
 
 
 async def test_sql_percentile_matches_nearest_rank(
     sessions: SessionFactory, clock: FakeClock
 ) -> None:
-    rng = random.Random(42)  # noqa: S311 (amostra determinística de teste, sem uso criptográfico)
+    rng = random.Random(42)  # noqa: S311 (deterministic test sample, no cryptographic use)
     for n in (1, 2, 7, 20, 21, 137):
         monitor = await create_monitor(sessions, clock, name=f"p95 {n}")
         values = [rng.randint(10, 3000) for _ in range(n)]
@@ -72,13 +72,13 @@ async def test_incident_crossing_window_and_open_incident_duration(
     target = ScriptedTarget(clock)
     target.mode = "error"
     worker = make_worker(sessions, clock, target, settings)
-    await tick(worker, clock, 600)  # incidente começa ~12:00 e segue aberto
+    await tick(worker, clock, 600)  # the incident starts around 12:00 and stays open
     now = clock.now()
     async with sessions() as session:
         window_start = START + timedelta(minutes=5)
         m = await queries.monitor_metrics(session, monitor.id, start=window_start, end=now, now=now)
     assert m.incident_count == 1
-    assert m.incident_duration == now - window_start  # cortado no início da janela
+    assert m.incident_duration == now - window_start  # cut at the start of the window
 
 
 async def test_paused_period_produces_no_samples(

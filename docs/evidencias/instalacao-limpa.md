@@ -86,7 +86,7 @@ Em seguida, no mesmo clone, `scripts/demo.sh` concluiu os 11 passos:
 Depois de criar esta página e `docs/evidencias/verificacao.md`:
 
 ```text
-$ uv run python scripts/conferir_referencias.py
+$ uv run python scripts/check_doc_references.py
 416 referências conferidas, 0 problemas
 (código 0)
 ```

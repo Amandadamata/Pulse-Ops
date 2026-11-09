@@ -1,4 +1,4 @@
-"""Erros de caso de uso, traduzidos para HTTP pelas rotas."""
+"""Use case errors, translated to HTTP by the routes."""
 
 from pulseops.domain.monitor_rules import FieldError
 
@@ -8,7 +8,7 @@ class NotFoundError(Exception):
 
 
 class ConflictError(Exception):
-    """Operação incompatível com o estado atual (por exemplo, editar monitor arquivado)."""
+    """Operation incompatible with the current state (for example, editing an archived monitor)."""
 
 
 class ValidationFailedError(Exception):

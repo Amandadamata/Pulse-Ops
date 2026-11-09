@@ -1,7 +1,7 @@
-"""Ambiente do Alembic: usa a mesma URL e os mesmos modelos da aplicação.
+"""Alembic environment: uses the same URL and models as the application.
 
-As migrações rodam de forma síncrona com o driver psycopg 3, o mesmo usado pela
-aplicação no modo assíncrono.
+Migrations run synchronously with the psycopg 3 driver, the same one the
+application uses in async mode.
 """
 
 from logging.config import fileConfig
@@ -20,7 +20,7 @@ target_metadata = Base.metadata
 
 
 def database_url() -> str:
-    # Permite que os testes passem uma URL própria via config.attributes.
+    # Lets the tests pass their own URL through config.attributes.
     return str(config.attributes.get("database_url") or Settings().database_url)
 
 

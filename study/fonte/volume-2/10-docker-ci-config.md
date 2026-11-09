@@ -184,7 +184,7 @@ link de uma execução (volume 1, parte I).
   reaplicada.
 - Linhas 55–56: os testes com cobertura mínima de 90% no total.
 - Linhas 57–60: metas mais altas, 95%, para domínio e segurança.
-- Linhas 61–62: o `conferir_referencias.py` (D9).
+- Linhas 61–62: o `check_doc_references.py` (D9).
 - Linhas 63–66: o `pip-audit` confere as versões travadas no `uv.lock` contra a base
   de vulnerabilidades conhecidas. **Ponto de atenção:** o CI fixa a versão 2.9.0 do
   `pip-audit` (linha 66), enquanto o grupo `dev` do `pyproject.toml` pede `>=2.10.1`.

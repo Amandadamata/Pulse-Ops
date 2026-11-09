@@ -1,4 +1,4 @@
-"""Histórico paginado e filtros (RF04) e cenário 18 (UTC e limites [início, fim))."""
+"""Paginated history and filters (RF04) and scenario 18 (UTC and [start, end) limits)."""
 
 from datetime import timedelta
 
@@ -55,7 +55,7 @@ async def test_filter_by_outcome(
 async def test_window_start_inclusive_end_exclusive(
     api: httpx.AsyncClient, sessions: SessionFactory, clock: FakeClock
 ) -> None:
-    """Cenário 18: checks exatamente às 12:00, 12:01 e 12:02 UTC; [12:01, 12:02) pega só 12:01."""
+    """Scenario 18: checks at exactly 12:00, 12:01 and 12:02 UTC; [12:01, 12:02) only gets 12:01."""
     monitor = await create_monitor(sessions, clock)
     await insert_checks(sessions, monitor.id, [("healthy", 10)] * 3, start=START, step=60)
     start = (START + timedelta(minutes=1)).isoformat().replace("+00:00", "Z")
@@ -70,7 +70,7 @@ async def test_window_with_other_timezone_is_converted(
     api: httpx.AsyncClient, sessions: SessionFactory, clock: FakeClock, settings: Settings
 ) -> None:
     monitor_id = await seed(sessions, clock, settings, ["ok", "ok", "ok"])
-    # 09:01 em São Paulo (UTC−3) é 12:01 UTC.
+    # 09:01 in Sao Paulo (UTC-3) is 12:01 UTC.
     params = {"from": "2026-01-15T09:01:00-03:00", "to": "2026-01-15T09:02:00-03:00"}
     page = (await api.get(f"/api/v1/monitors/{monitor_id}/checks", params=params)).json()
     assert len(page["items"]) == 1
@@ -93,7 +93,7 @@ async def test_pagination_limits(
     base = f"/api/v1/monitors/{monitor.id}/checks"
     assert (await api.get(base, params={"limit": 0})).status_code == 422
     assert (await api.get(base, params={"limit": 201})).status_code == 422
-    assert (await api.get(base, params={"cursor": "lixo!!"})).status_code == 422
+    assert (await api.get(base, params={"cursor": "garbage!!"})).status_code == 422
     assert (await api.get("/api/v1/incidents", params={"limit": 500})).status_code == 422
     assert (await api.get("/api/v1/incidents", params={"status": "xyz"})).status_code == 422
 
@@ -118,9 +118,11 @@ async def test_incident_list_detail_and_timeline(
     resolved_id = closed_page["items"][0]["id"]
     detail = (await api.get(f"/api/v1/incidents/{resolved_id}")).json()
     assert [e["kind"] for e in detail["events"]] == ["first_failure", "opened", "resolved"]
-    assert detail["incident"]["opening_reason"].startswith("Incidente confirmado após 2 falhas")
+    assert detail["incident"]["opening_reason"].startswith(
+        "Incident confirmed after 2 consecutive failures"
+    )
     assert detail["incident"]["resolution_explanation"].startswith(
-        "Recuperado após 1 sucesso consecutivo"
+        "Recovered after 1 consecutive success"
     )
     assert detail["events"][1]["details"]["failure_threshold"] == 2
     assert [a["kind"] for a in detail["alerts"]] == ["incident.opened", "incident.resolved"]
@@ -131,7 +133,7 @@ async def test_alerts_endpoint_lists_deliveries_and_attempts(
     api: httpx.AsyncClient, sessions: SessionFactory, clock: FakeClock, settings: Settings
 ) -> None:
     await api.post(
-        "/api/v1/destinations", json={"name": "equipe", "url": "https://hooks.example.com/x"}
+        "/api/v1/destinations", json={"name": "team", "url": "https://hooks.example.com/x"}
     )
     await create_monitor(sessions, clock, failure_threshold=1)
     target = ScriptedTarget(clock)

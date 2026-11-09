@@ -1,7 +1,7 @@
-"""Linha de comando: `pulseops create-admin --username NOME`.
+"""Command line: `pulseops create-admin --username NAME`.
 
-A senha é lida do terminal (sem eco) ou da entrada padrão com --password-stdin,
-para não aparecer no histórico do shell nem na lista de processos.
+The password is read from the terminal (without echo) or from standard input with
+--password-stdin, so it never shows up in the shell history or the process list.
 """
 
 import argparse
@@ -19,7 +19,7 @@ from pulseops.services.auth import create_operator
 
 
 async def _create_admin(username: str, password: str, *, exists_ok: bool) -> bool:
-    """Devolve False se o usuário já existia e `exists_ok` foi pedido."""
+    """Returns False if the user already existed and `exists_ok` was requested."""
     engine = create_engine(Settings().database_url, pool_size=1)
     try:
         sessions = create_session_factory(engine)
@@ -37,20 +37,24 @@ async def _create_admin(username: str, password: str, *, exists_ok: bool) -> boo
 def _read_password(from_stdin: bool) -> str:
     if from_stdin:
         return sys.stdin.readline().rstrip("\n")
-    first = getpass.getpass("Senha (mínimo 12 caracteres): ")
-    if getpass.getpass("Repita a senha: ") != first:
-        raise ValueError("as senhas não conferem")
+    first = getpass.getpass("Password (at least 12 characters): ")
+    if getpass.getpass("Repeat the password: ") != first:
+        raise ValueError("the passwords do not match")
     return first
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="pulseops")
     commands = parser.add_subparsers(dest="command", required=True)
-    admin = commands.add_parser("create-admin", help="cria o operador do PulseOps")
+    admin = commands.add_parser("create-admin", help="creates the PulseOps operator")
     admin.add_argument("--username", required=True)
-    admin.add_argument("--password-stdin", action="store_true", help="lê a senha da entrada padrão")
     admin.add_argument(
-        "--exists-ok", action="store_true", help="não falha se o usuário já existir (usado na demo)"
+        "--password-stdin", action="store_true", help="reads the password from standard input"
+    )
+    admin.add_argument(
+        "--exists-ok",
+        action="store_true",
+        help="does not fail if the user already exists (used in the demo)",
     )
     args = parser.parse_args(argv)
 
@@ -58,9 +62,9 @@ def main(argv: list[str] | None = None) -> int:
         password = _read_password(args.password_stdin)
         created = asyncio.run(_create_admin(args.username, password, exists_ok=args.exists_ok))
     except ValueError as exc:
-        print(f"erro: {exc}", file=sys.stderr)
+        print(f"error: {exc}", file=sys.stderr)
         return 1
-    print(f"operador {args.username!r} {'criado' if created else 'já existia'}")
+    print(f"operator {args.username!r} {'created' if created else 'already existed'}")
     return 0
 
 

@@ -1,4 +1,4 @@
-"""Mudanças em incidentes. Sempre chamadas dentro de uma transação aberta por quem chama."""
+"""Incident changes. Always called inside a transaction opened by the caller."""
 
 from datetime import datetime
 from typing import Any
@@ -12,12 +12,12 @@ from pulseops.services.alerts import enqueue_incident_alert
 
 def _completed(check: Check) -> tuple[str, datetime]:
     if check.outcome is None or check.finished_at is None:
-        raise ValueError(f"check {check.id} ainda não foi concluído")
+        raise ValueError(f"check {check.id} is not finished yet")
     return check.outcome, check.finished_at
 
 
 def _snapshot(monitor: Monitor) -> dict[str, Any]:
-    """Valores vigentes guardados junto do evento (RF03.12)."""
+    """Current values stored with the event (RF03.12)."""
     return {
         "failure_threshold": monitor.failure_threshold,
         "recovery_threshold": monitor.recovery_threshold,
@@ -61,7 +61,7 @@ async def open_incident(
         last_check_id=check.id,
     )
     session.add(incident)
-    await session.flush()  # gera o id; o índice único parcial é verificado aqui
+    await session.flush()  # generates the id; the partial unique index is checked here
 
     details = _snapshot(monitor)
     session.add_all(
@@ -70,7 +70,7 @@ async def open_incident(
                 incident_id=incident.id,
                 kind="first_failure",
                 occurred_at=first_failure_at,
-                message="Primeira falha da sequência observada.",
+                message="First failure of the observed sequence.",
                 details=details,
             ),
             IncidentEvent(
@@ -97,7 +97,7 @@ async def open_incident(
 async def record_failure_on_open_incident(
     session: AsyncSession, *, incident: Incident, monitor: Monitor, check: Check
 ) -> None:
-    """Novas falhas atualizam o mesmo incidente; só registra evento se o tipo de erro mudar."""
+    """New failures update the same incident; an event only if the error type changes."""
     outcome, finished_at = _completed(check)
     incident.failure_count += 1
     incident.last_check_id = check.id
@@ -108,7 +108,7 @@ async def record_failure_on_open_incident(
                 incident_id=incident.id,
                 kind="error_changed",
                 occurred_at=finished_at,
-                message=f"Tipo de falha mudou de {incident.last_outcome} para {outcome}: "
+                message=f"Failure type changed from {incident.last_outcome} to {outcome}: "
                 f"{check.explanation}.",
                 details={"from": incident.last_outcome, "to": outcome},
                 check_id=check.id,
@@ -148,14 +148,14 @@ async def resolve_incident(
 async def close_incident_by_operator(
     session: AsyncSession, *, monitor: Monitor, action: str, now: datetime
 ) -> Incident | None:
-    """Pausa/arquivamento encerram o incidente como 'closed' (ADR 0006)."""
+    """Pausing/archiving closes the incident as 'closed' (ADR 0006)."""
     incident = await get_open_incident(session, monitor.id)
     if incident is None:
         return None
-    verb = "pausado" if action == "paused" else "arquivado"
+    verb = "paused" if action == "paused" else "archived"
     reason = (
-        f"Monitor {verb} pelo operador com o incidente aberto; o incidente foi encerrado "
-        "sem recuperação observada."
+        f"Monitor {verb} by the operator with the incident open; the incident was closed "
+        "with no recovery observed."
     )
     incident.status = "closed"
     incident.ended_at = now
@@ -192,10 +192,10 @@ async def record_config_change(
             incident_id=incident.id,
             kind="config_changed",
             occurred_at=now,
-            message="Configuração alterada com incidente aberto ("
+            message="Configuration changed with an open incident ("
             + ", ".join(changed)
-            + "); contadores reiniciados. A recuperação passa a exigir "
-            f"{monitor.recovery_threshold} sucesso(s) consecutivo(s).",
+            + "); counters reset. Recovery now requires "
+            f"{monitor.recovery_threshold} consecutive success(es).",
             details={**_snapshot(monitor), "changed_fields": changed},
         )
     )

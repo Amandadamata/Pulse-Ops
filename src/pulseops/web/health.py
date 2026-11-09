@@ -1,4 +1,4 @@
-"""Liveness e readiness do próprio PulseOps (RF09). Não exigem login."""
+"""Liveness and readiness of PulseOps itself (RF09). They do not require login."""
 
 import asyncio
 from typing import Any
@@ -17,14 +17,14 @@ READY_TIMEOUT_SECONDS = 2.0
 
 @router.get("/live")
 async def live() -> dict[str, str]:
-    """O processo está respondendo. Não consulta o banco de propósito."""
+    """The process is responding. It does not query the database on purpose."""
     return {"status": "ok"}
 
 
 @router.get("/ready")
 async def ready(state: State) -> JSONResponse:
-    """Pronto para atender: o banco responde em até 2 s. O worker é informado, mas a API
-    continua pronta sem ele (o painel mostra os dados como desatualizados)."""
+    """Ready to serve: the database answers within 2 s. The worker status is reported, but the API
+    stays ready without it (the dashboard shows the data as stale)."""
     body: dict[str, Any] = {"status": "ok", "database": "ok"}
     try:
         async with asyncio.timeout(READY_TIMEOUT_SECONDS):

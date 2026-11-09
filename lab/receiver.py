@@ -1,8 +1,8 @@
-"""Receptor de webhooks do laboratório, com deduplicação por X-PulseOps-Event-Id.
+"""Lab webhook receiver, with deduplication by X-PulseOps-Event-Id.
 
-POST /webhook: se `available` for falso, responde 503 (simula destino fora do ar).
-Eventos repetidos (mesmo id) são aceitos com 200 mas contados como duplicados,
-que é o que um receptor real deve fazer com entrega "pelo menos uma vez".
+POST /webhook: if `available` is false, it answers 503 (simulates a destination that is down).
+Repeated events (same id) are accepted with 200 but counted as duplicates,
+which is what a real receiver should do with "at least once" delivery.
 """
 
 from typing import Any
@@ -23,7 +23,7 @@ class Inbox:
         self.rejected = 0
 
     def receive(self, event_id: str, payload: dict[str, Any]) -> bool:
-        """Guarda o evento. Devolve False se o id já tinha sido recebido."""
+        """Stores the event. Returns False if the id had already been received."""
         if event_id in self.events:
             self.duplicates += 1
             return False
@@ -45,9 +45,9 @@ async def webhook(
 ) -> JSONResponse:
     if not inbox.available:
         inbox.rejected += 1
-        return JSONResponse({"detail": "receptor indisponível (simulado)"}, status_code=503)
+        return JSONResponse({"detail": "receiver unavailable (simulated)"}, status_code=503)
     if not x_pulseops_event_id:
-        return JSONResponse({"detail": "X-PulseOps-Event-Id ausente"}, status_code=400)
+        return JSONResponse({"detail": "missing X-PulseOps-Event-Id"}, status_code=400)
     payload = await request.json()
     new = inbox.receive(x_pulseops_event_id, payload)
     return JSONResponse({"duplicate": not new})

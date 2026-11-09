@@ -1,4 +1,4 @@
-"""Fórmulas de métricas (RF05) — cenário 19 na parte sem banco."""
+"""Metric formulas (RF05): scenario 19, the part without a database."""
 
 from datetime import timedelta
 
@@ -13,7 +13,7 @@ def test_nearest_rank_without_samples_is_none() -> None:
 
 
 def test_nearest_rank_small_sample_returns_maximum() -> None:
-    # ceil(0,95 × 5) = 5 → quinto valor ordenado, que é o máximo.
+    # ceil(0.95 x 5) = 5 -> the fifth sorted value, which is the maximum.
     assert nearest_rank([30, 10, 50, 20, 40], 95) == 50
 
 

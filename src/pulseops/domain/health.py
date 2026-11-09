@@ -1,8 +1,8 @@
-"""Regra de transição de saúde e de incidentes (RF03).
+"""Health and incident transition rule (RF03).
 
-Este módulo não conhece banco nem HTTP: recebe o estado atual de um monitor e o
-resultado de um check, e devolve o novo estado e o que fazer com o incidente.
-Isso permite testar a regra inteira com objetos simples.
+This module knows nothing about the database or HTTP: it receives a monitor's current
+state and a check result, and returns the new state and what to do with the incident.
+That makes it possible to test the whole rule with plain objects.
 """
 
 from dataclasses import dataclass, replace
@@ -22,11 +22,11 @@ class Health(StrEnum):
     @property
     def label(self) -> str:
         return {
-            Health.NO_DATA: "Sem dados",
-            Health.HEALTHY: "Saudável",
-            Health.DEGRADED: "Degradado",
-            Health.DOWN: "Indisponível",
-            Health.PAUSED: "Pausado",
+            Health.NO_DATA: "No data",
+            Health.HEALTHY: "Healthy",
+            Health.DEGRADED: "Degraded",
+            Health.DOWN: "Down",
+            Health.PAUSED: "Paused",
         }[self]
 
 
@@ -45,7 +45,7 @@ class Thresholds:
 
 @dataclass(frozen=True)
 class TrackerState:
-    """Parte do monitor que a regra lê e altera. Fica persistida no banco."""
+    """The part of the monitor that the rule reads and changes. It is persisted in the database."""
 
     health: Health
     consecutive_failures: int
@@ -74,13 +74,13 @@ class Decision:
 
 
 class HealthTracker:
-    """Aplica um resultado de check ao estado do monitor.
+    """Applies a check result to the monitor state.
 
-    Regras (docs/requisitos.md, RF03):
-    - falha soma em `consecutive_failures` e zera os sucessos; sucesso faz o contrário;
-    - erro interno não muda nada;
-    - o incidente abre quando as falhas atingem `failure_threshold` e fecha quando os
-      sucessos atingem `recovery_threshold`.
+    Rules (docs/requisitos.md, RF03):
+    - a failure adds to `consecutive_failures` and resets successes; a success does the opposite;
+    - an internal error changes nothing;
+    - the incident opens when failures reach `failure_threshold` and closes when
+      successes reach `recovery_threshold`.
     """
 
     def __init__(self, thresholds: Thresholds) -> None:
@@ -92,7 +92,7 @@ class HealthTracker:
                 state,
                 IncidentAction.NONE,
                 state.health,
-                f"Erro interno do PulseOps ignorado na contagem: {obs.explanation}",
+                f"PulseOps internal error left out of the count: {obs.explanation}",
             )
         if obs.outcome.is_failure:
             return self._on_failure(state, obs)
@@ -110,20 +110,20 @@ class HealthTracker:
         limit = self._thresholds.failure_threshold
 
         if state.incident_open:
-            reason = f"Incidente continua aberto; último resultado: {obs.explanation}."
+            reason = f"Incident still open; last result: {obs.explanation}."
             new = replace(new, health=Health.DOWN)
             return Decision(new, IncidentAction.UPDATE, state.health, reason)
 
         if failures >= limit:
             reason = (
-                f"Incidente confirmado após {failures} "
-                f"{_plural(failures, 'falha consecutiva', 'falhas consecutivas')}; "
-                f"último resultado: {obs.explanation}."
+                f"Incident confirmed after {failures} "
+                f"{_plural(failures, 'consecutive failure', 'consecutive failures')}; "
+                f"last result: {obs.explanation}."
             )
             new = replace(new, health=Health.DOWN, incident_open=True)
             return Decision(new, IncidentAction.OPEN, state.health, reason)
 
-        reason = f"Falha {failures} de {limit} necessárias para abrir incidente: {obs.explanation}."
+        reason = f"Failure {failures} of {limit} needed to open an incident: {obs.explanation}."
         new = replace(new, health=Health.DEGRADED)
         return Decision(new, IncidentAction.NONE, state.health, reason)
 
@@ -141,22 +141,21 @@ class HealthTracker:
             if successes >= limit:
                 health = Health.DEGRADED if obs.outcome is Outcome.SLOW else Health.HEALTHY
                 reason = (
-                    f"Recuperado após {successes} "
-                    f"{_plural(successes, 'sucesso consecutivo', 'sucessos consecutivos')}; "
-                    f"último resultado: {obs.explanation}."
+                    f"Recovered after {successes} "
+                    f"{_plural(successes, 'consecutive success', 'consecutive successes')}; "
+                    f"last result: {obs.explanation}."
                 )
                 new = replace(new, health=health, incident_open=False)
                 return Decision(new, IncidentAction.RESOLVE, state.health, reason)
             reason = (
-                f"Sucesso {successes} de {limit} necessários para encerrar o incidente: "
-                f"{obs.explanation}."
+                f"Success {successes} of {limit} needed to close the incident: {obs.explanation}."
             )
             return Decision(
                 replace(new, health=Health.DOWN), IncidentAction.NONE, state.health, reason
             )
 
         if obs.outcome is Outcome.SLOW:
-            reason = f"Resposta lenta: {obs.explanation}."
+            reason = f"Slow response: {obs.explanation}."
             return Decision(
                 replace(new, health=Health.DEGRADED), IncidentAction.NONE, state.health, reason
             )

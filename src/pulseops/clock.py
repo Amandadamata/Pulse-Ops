@@ -1,4 +1,4 @@
-"""Relógio substituível: o código de domínio nunca chama datetime.now() direto."""
+"""Replaceable clock: domain code never calls datetime.now() directly."""
 
 import time
 from datetime import UTC, datetime
@@ -7,11 +7,11 @@ from typing import Protocol
 
 class Clock(Protocol):
     def now(self) -> datetime:
-        """Instante atual em UTC, com fuso (timezone-aware)."""
+        """Current instant in UTC, timezone-aware."""
         ...
 
     def monotonic(self) -> float:
-        """Segundos de um relógio que nunca volta para trás; só serve para medir durações."""
+        """Seconds from a clock that never goes backwards; only for measuring durations."""
         ...
 
 

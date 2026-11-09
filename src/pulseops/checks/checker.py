@@ -1,4 +1,4 @@
-"""Executa uma verificação HTTP e classifica o resultado (RF02)."""
+"""Runs an HTTP check and classifies the result (RF02)."""
 
 import asyncio
 import socket
@@ -35,7 +35,7 @@ class CheckObservation:
 
 
 class Checker(Protocol):
-    """Qualquer objeto com este método serve ao worker (útil para testes e novos tipos)."""
+    """Any object with this method works for the worker (useful for tests and new check types)."""
 
     async def check(self, target: CheckTarget) -> CheckObservation: ...
 
@@ -50,8 +50,8 @@ class HttpChecker:
         start = self._clock.monotonic()
         status_code: int | None = None
         try:
-            # Prazo total da verificação. Os timeouts do HTTPX valem por fase (conectar,
-            # ler...), então sozinhos poderiam somar mais que o configurado.
+            # Total deadline for the check. HTTPX timeouts apply per phase (connect,
+            # read...), so on their own they could add up to more than configured.
             async with asyncio.timeout(target.timeout_seconds):
                 async with self._client.stream(
                     target.method,
@@ -59,22 +59,22 @@ class HttpChecker:
                     timeout=target.timeout_seconds,
                     follow_redirects=False,
                 ) as response:
-                    # O corpo não é lido (RF02.4): a duração vai até os cabeçalhos.
+                    # The body is not read (RF02.4): the duration ends at the headers.
                     status_code = response.status_code
             outcome, explanation = self._classify_response(
                 target, status_code, self._elapsed_ms(start)
             )
         except (TimeoutError, httpx.TimeoutException):
             outcome = Outcome.TIMEOUT
-            explanation = f"sem resposta em {target.timeout_seconds:g} s"
+            explanation = f"no response in {target.timeout_seconds:g} s"
         except UnsafeDestinationError as exc:
             outcome = Outcome.BLOCKED
-            explanation = f"destino bloqueado pela política de rede: {exc}"
+            explanation = f"destination blocked by the network policy: {exc}"
         except httpx.TransportError as exc:
             outcome, explanation = _classify_transport_error(exc)
-        except Exception as exc:  # erro do próprio PulseOps: não pode virar "alvo caiu"
+        except Exception as exc:  # PulseOps' own error: it must not turn into "target is down"
             outcome = Outcome.INTERNAL_ERROR
-            explanation = f"erro interno ao verificar ({type(exc).__name__})"
+            explanation = f"internal error while checking ({type(exc).__name__})"
 
         return CheckObservation(
             outcome=outcome,
@@ -95,32 +95,35 @@ class HttpChecker:
         if status_code not in target.accepted:
             return (
                 Outcome.UNEXPECTED_STATUS,
-                f"HTTP {status_code} fora dos status aceitos ({target.accepted})",
+                f"HTTP {status_code} outside the accepted statuses ({target.accepted})",
             )
         if duration_ms > target.latency_threshold_ms:
             return (
                 Outcome.SLOW,
-                f"HTTP {status_code} em {duration_ms} ms (limite {target.latency_threshold_ms} ms)",
+                f"HTTP {status_code} in {duration_ms} ms (limit {target.latency_threshold_ms} ms)",
             )
-        return Outcome.HEALTHY, f"HTTP {status_code} em {duration_ms} ms"
+        return Outcome.HEALTHY, f"HTTP {status_code} in {duration_ms} ms"
 
 
 def _classify_transport_error(exc: httpx.TransportError) -> tuple[Outcome, str]:
-    """Separa TLS de conexão/DNS olhando a cadeia de causas da exceção."""
+    """Tells TLS apart from connection/DNS by walking the exception's cause chain."""
     causes = _cause_chain(exc)
     if any(isinstance(c, ssl.SSLCertVerificationError) for c in causes):
-        return Outcome.TLS_ERROR, "falha TLS: certificado não confiável ou de outro nome"
+        return (
+            Outcome.TLS_ERROR,
+            "TLS failure: untrusted certificate or certificate for another name",
+        )
     if any(isinstance(c, ssl.SSLError) for c in causes) or "SSL" in str(exc):
-        return Outcome.TLS_ERROR, "falha TLS durante o handshake"
+        return Outcome.TLS_ERROR, "TLS failure during the handshake"
     if isinstance(exc, httpx.ConnectError):
         if any(isinstance(c, socket.gaierror) for c in causes):
-            return Outcome.CONNECTION_ERROR, "falha de DNS: nome não resolvido"
+            return Outcome.CONNECTION_ERROR, "DNS failure: name not resolved"
         if any(isinstance(c, ConnectionRefusedError) for c in causes) or "refused" in str(exc):
-            return Outcome.CONNECTION_ERROR, "conexão recusada"
-        return Outcome.CONNECTION_ERROR, "falha de conexão"
+            return Outcome.CONNECTION_ERROR, "connection refused"
+        return Outcome.CONNECTION_ERROR, "connection failure"
     if isinstance(exc, httpx.RemoteProtocolError):
-        return Outcome.CONNECTION_ERROR, "resposta HTTP inválida ou conexão encerrada pelo alvo"
-    return Outcome.CONNECTION_ERROR, f"erro de rede ({type(exc).__name__})"
+        return Outcome.CONNECTION_ERROR, "invalid HTTP response or connection closed by the target"
+    return Outcome.CONNECTION_ERROR, f"network error ({type(exc).__name__})"
 
 
 def _cause_chain(exc: BaseException) -> list[BaseException]:

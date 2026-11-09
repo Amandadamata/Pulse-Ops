@@ -1,4 +1,4 @@
-"""Cenário 21: autenticação, autorização e CSRF (RF08)."""
+"""Scenario 21: authentication, authorization and CSRF (RF08)."""
 
 import hashlib
 from datetime import timedelta
@@ -53,10 +53,10 @@ async def test_wrong_password_is_rejected(app_client: httpx.AsyncClient, operato
     assert token
     response = await app_client.post(
         "/login",
-        data={"username": ADMIN_USER, "password": "errada-errada", "csrf_token": token.group(1)},
+        data={"username": ADMIN_USER, "password": "wrong-wrong", "csrf_token": token.group(1)},
     )
     assert response.status_code == 401
-    assert "Usuário ou senha inválidos" in response.text
+    assert "Invalid username or password" in response.text
     assert "pulseops_session" not in response.cookies
 
 
@@ -70,7 +70,7 @@ async def test_unknown_user_gets_same_message(
         "/login",
         data={"username": "ninguem", "password": ADMIN_PASSWORD, "csrf_token": token.group(1)},
     )
-    assert response.status_code == 401 and "Usuário ou senha inválidos" in response.text
+    assert response.status_code == 401 and "Invalid username or password" in response.text
 
 
 async def test_login_form_requires_its_csrf_cookie(
@@ -99,7 +99,7 @@ async def test_api_mutation_requires_csrf_header(api: httpx.AsyncClient) -> None
     good = api.headers.pop("X-CSRF-Token")
     assert (await api.post("/api/v1/monitors", json=body)).status_code == 403
     assert (
-        await api.post("/api/v1/monitors", json=body, headers={"X-CSRF-Token": "errado"})
+        await api.post("/api/v1/monitors", json=body, headers={"X-CSRF-Token": "wrong"})
     ).status_code == 403
     assert (
         await api.post("/api/v1/monitors", json=body, headers={"X-CSRF-Token": good})
@@ -122,7 +122,7 @@ async def test_logout_invalidates_session(api: httpx.AsyncClient) -> None:
     old_cookie = api.cookies.get("pulseops_session")
     response = await api.post("/logout", data={"csrf_token": token})
     assert response.status_code == 303
-    api.cookies.set("pulseops_session", old_cookie or "")  # reusar o cookie antigo não funciona
+    api.cookies.set("pulseops_session", old_cookie or "")  # reusing the old cookie does not work
     assert (await api.get("/api/v1/monitors")).status_code == 401
 
 
@@ -163,9 +163,7 @@ async def test_next_parameter_cannot_redirect_outside(
 
 async def test_javascript_has_no_token(app_client: httpx.AsyncClient) -> None:
     script = (await app_client.get("/static/app.js")).text
-    assert "csrf" not in script.lower() and "token" not in script.lower().replace(
-        "nenhum token", ""
-    )
+    assert "csrf" not in script.lower() and "token" not in script.lower().replace("no token", "")
 
 
 async def test_login_page_redirects_when_already_logged_in(api: httpx.AsyncClient) -> None:

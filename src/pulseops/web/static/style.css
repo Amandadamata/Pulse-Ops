@@ -1,4 +1,4 @@
-/* PulseOps: estilo sóbrio, contraste AA e foco visível. Cores sempre acompanhadas de texto. */
+/* PulseOps: plain style, AA contrast and visible focus. Colors always come with text. */
 :root {
   --bg: #f6f7f9;
   --surface: #ffffff;
@@ -126,7 +126,7 @@ label { font-weight: 600; }
 .chart .dot-tls_error, .chart .dot-blocked { fill: var(--down-fg); stroke: #000; stroke-width: 1; }
 
 @media (max-width: 720px) {
-  /* A tabela rola na horizontal em vez de espremer as colunas em uma palavra por linha. */
+  /* The table scrolls sideways instead of squeezing the columns to one word per line. */
   .data-table { display: block; overflow-x: auto; }
   .data-table td, .data-table th { min-width: 7.5rem; }
   .data-table td:first-child { min-width: 11rem; }

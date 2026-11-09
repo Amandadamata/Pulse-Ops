@@ -1,4 +1,4 @@
-"""API de monitores (RF01): cenários 1, 11 e 20."""
+"""Monitor API (RF01): scenarios 1, 11 and 20."""
 
 import httpx
 import pytest
@@ -14,7 +14,7 @@ VALID = {"name": "Checkout", "url": "https://checkout.example.com/health"}
 
 
 async def test_create_list_get_update(api: httpx.AsyncClient) -> None:
-    created = await api.post("/api/v1/monitors", json={**VALID, "description": "fluxo de compra"})
+    created = await api.post("/api/v1/monitors", json={**VALID, "description": "checkout flow"})
     assert created.status_code == 201
     monitor_id = created.json()["id"]
     assert [m["name"] for m in (await api.get("/api/v1/monitors")).json()] == ["Checkout"]
@@ -54,7 +54,7 @@ async def test_create_list_get_update(api: httpx.AsyncClient) -> None:
 async def test_invalid_configuration_is_rejected(
     api: httpx.AsyncClient, body: dict, field: str
 ) -> None:
-    """Cenário 1."""
+    """Scenario 1."""
     response = await api.post("/api/v1/monitors", json=body)
     assert response.status_code == 422
     assert field in [d["loc"][-1] for d in response.json()["detail"]]
@@ -76,16 +76,16 @@ async def test_duplicate_name_is_rejected_case_insensitive(api: httpx.AsyncClien
 async def test_dns_pointing_to_private_address_is_rejected(
     api: httpx.AsyncClient, resolver
 ) -> None:
-    resolver.mapping["interno.example.com"] = ["10.1.2.3"]
+    resolver.mapping["internal.example.com"] = ["10.1.2.3"]
     response = await api.post(
-        "/api/v1/monitors", json={**VALID, "url": "https://interno.example.com/"}
+        "/api/v1/monitors", json={**VALID, "url": "https://internal.example.com/"}
     )
     assert response.status_code == 422
-    assert "endereço privado" in response.json()["detail"][0]["msg"]
+    assert "private address" in response.json()["detail"][0]["msg"]
 
 
 async def test_pause_resume_and_conflicts(api: httpx.AsyncClient) -> None:
-    """Cenário 11 pela API."""
+    """Scenario 11 through the API."""
     monitor_id = (await api.post("/api/v1/monitors", json=VALID)).json()["id"]
     paused = (await api.post(f"/api/v1/monitors/{monitor_id}/pause")).json()
     assert (paused["state"], paused["health"], paused["next_run_at"]) == ("paused", "paused", None)
@@ -99,7 +99,7 @@ async def test_pause_resume_and_conflicts(api: httpx.AsyncClient) -> None:
 async def test_archive_preserves_history(
     api: httpx.AsyncClient, sessions: SessionFactory, clock: FakeClock, settings: Settings
 ) -> None:
-    """Cenário 20: arquivar não apaga checks nem incidentes."""
+    """Scenario 20: archiving does not delete checks or incidents."""
     body = {**VALID, "failure_threshold": 1}
     monitor_id = (await api.post("/api/v1/monitors", json=body)).json()["id"]
     target = ScriptedTarget(clock)
@@ -123,9 +123,9 @@ async def test_archive_preserves_history(
     assert monitor_id not in [m["id"] for m in (await api.get("/api/v1/monitors")).json()]
     listed = (await api.get("/api/v1/monitors", params={"include_archived": True})).json()
     assert monitor_id in [m["id"] for m in listed]
-    assert await tick(worker, clock) == 0  # arquivado não é mais verificado
+    assert await tick(worker, clock) == 0  # an archived monitor is no longer checked
 
-    # O nome volta a ficar livre para um monitor novo.
+    # The name is free again for a new monitor.
     assert (await api.post("/api/v1/monitors", json=VALID)).status_code == 201
 
 
@@ -135,7 +135,7 @@ async def test_check_now_marks_next_check_as_manual(
     monitor_id = (await api.post("/api/v1/monitors", json=VALID)).json()["id"]
     worker = make_worker(sessions, clock, ScriptedTarget(clock), settings)
     await tick(worker, clock, 5)
-    assert await worker.run_checks_once() == 0  # próximo só daqui a 55 s
+    assert await worker.run_checks_once() == 0  # next one only in 55 s
     await api.post(f"/api/v1/monitors/{monitor_id}/check")
     assert await worker.run_checks_once() == 1
     items = (await api.get(f"/api/v1/monitors/{monitor_id}/checks")).json()["items"]
@@ -144,17 +144,17 @@ async def test_check_now_marks_next_check_as_manual(
 
 async def test_destinations_api_validates_url(api: httpx.AsyncClient) -> None:
     bad = await api.post(
-        "/api/v1/destinations", json={"name": "interno", "url": "http://192.168.0.10/hook"}
+        "/api/v1/destinations", json={"name": "internal", "url": "http://192.168.0.10/hook"}
     )
     assert bad.status_code == 422
     good = await api.post(
-        "/api/v1/destinations", json={"name": "equipe", "url": "https://hooks.example.com/x"}
+        "/api/v1/destinations", json={"name": "team", "url": "https://hooks.example.com/x"}
     )
     assert good.status_code == 201
     dest_id = good.json()["id"]
     assert (
         await api.post(
-            "/api/v1/destinations", json={"name": "equipe", "url": "https://hooks.example.com/y"}
+            "/api/v1/destinations", json={"name": "team", "url": "https://hooks.example.com/y"}
         )
     ).status_code == 409
     patched = await api.patch(f"/api/v1/destinations/{dest_id}", json={"enabled": False})

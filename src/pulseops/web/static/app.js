@@ -1,5 +1,5 @@
-// Atualiza o resumo do painel a cada 15 s. A página funciona sem este script.
-// A requisição usa o cookie de sessão (HttpOnly); nenhum token fica neste arquivo.
+// Refreshes the dashboard summary every 15 s. The page works without this script.
+// The request uses the session cookie (HttpOnly); no token is kept in this file.
 (function () {
   "use strict";
   const section = document.querySelector("[data-summary-url]");
@@ -13,7 +13,7 @@
   }
 
   async function refresh() {
-    status.textContent = "Atualizando…";
+    status.textContent = "Refreshing…";
     try {
       const response = await fetch(url, { credentials: "same-origin", headers: { Accept: "application/json" } });
       if (!response.ok) throw new Error("HTTP " + response.status);
@@ -25,11 +25,11 @@
       setValue("stale", data.stale);
       setValue("open_incidents", data.open_incidents);
       setValue("failed_deliveries", data.failed_deliveries);
-      const when = new Date(data.generated_at).toLocaleTimeString("pt-BR");
-      status.textContent = "Resumo atualizado às " + when + "." +
-        (data.worker_alive ? "" : " Worker sem sinal: dados desatualizados.");
+      const when = new Date(data.generated_at).toLocaleTimeString("en-GB");
+      status.textContent = "Summary updated at " + when + "." +
+        (data.worker_alive ? "" : " Worker silent: stale data.");
     } catch (error) {
-      status.textContent = "Falha ao atualizar o resumo (" + error.message + "). Recarregue a página.";
+      status.textContent = "Could not refresh the summary (" + error.message + "). Reload the page.";
     }
   }
 

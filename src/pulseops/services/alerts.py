@@ -1,4 +1,4 @@
-"""Outbox de alertas: criação dos eventos e ciclo de vida das entregas (RF06, ADR 0007)."""
+"""Alert outbox: event creation and the delivery lifecycle (RF06, ADR 0007)."""
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -32,9 +32,9 @@ async def enqueue_incident_alert(
     explanation: str,
     now: datetime,
 ) -> AlertEvent:
-    """Cria o evento e uma entrega por destino ativo. Não faz commit: quem chama decide.
+    """Creates the event and one delivery per active destination. No commit: the caller decides.
 
-    Deve ser chamada dentro da mesma transação que mudou o incidente.
+    Must be called inside the same transaction that changed the incident.
     """
     key = event_key(incident.id, kind)
     payload: dict[str, Any] = {
@@ -90,12 +90,12 @@ async def enqueue_incident_alert(
 
 
 def backoff_delay(attempt: int, base_seconds: float, max_seconds: float) -> float:
-    """Espera antes da próxima tentativa após `attempt` falhas: base × 2^(attempt−1), com teto."""
+    """Wait before the next attempt after `attempt` failures: base x 2^(attempt-1), with a cap."""
     return float(min(base_seconds * 2 ** (attempt - 1), max_seconds))
 
 
 def is_permanent_status(status_code: int) -> bool:
-    """4xx indica pedido recusado pelo destino; repetir não ajuda. 408 e 429 são temporários."""
+    """4xx: the destination refused it, so retrying won't help. 408 and 429 are temporary."""
     return 400 <= status_code < 500 and status_code not in (408, 429)
 
 
@@ -111,8 +111,8 @@ class ClaimedDelivery:
 async def claim_due_deliveries(
     sessions: SessionFactory, *, now: datetime, limit: int, lease_seconds: float
 ) -> list[ClaimedDelivery]:
-    """Reserva entregas vencidas. Uma reserva vencida ('sending' antigo) volta a ser elegível,
-    o que cobre o worker que morreu no meio do envio (e pode gerar duplicata: RF06.8)."""
+    """Reserves due deliveries. An expired reservation (old 'sending') becomes eligible again,
+    which covers a worker that died in the middle of sending (and may cause a duplicate: RF06.8)."""
     async with sessions.begin() as session:
         rows = (
             await session.execute(
@@ -162,7 +162,7 @@ async def record_delivery_result(
     backoff_base: float,
     backoff_max: float,
 ) -> str:
-    """Grava a tentativa e decide o novo estado. Devolve o status final da entrega."""
+    """Saves the attempt and decides the new state. Returns the final delivery status."""
     if result.ok:
         attempt_result, status = "success", "delivered"
     elif result.permanent or claimed.attempt_number >= max_attempts:
@@ -191,7 +191,7 @@ async def record_delivery_result(
         elif status == "pending":
             delay = backoff_delay(claimed.attempt_number, backoff_base, backoff_max)
             values["next_attempt_at"] = now + timedelta(seconds=delay)
-        # Só altera se a entrega ainda estiver reservada por esta tentativa.
+        # Only changes it if the delivery is still reserved by this attempt.
         await session.execute(
             update(Delivery)
             .where(

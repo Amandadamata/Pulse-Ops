@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Laboratório de falhas do PulseOps: sobe o ambiente com o perfil "demo" e executa
-# o roteiro de 11 passos (scripts/demo_flow.py). Pode ser executado várias vezes.
+# PulseOps failure lab: starts the environment with the "demo" profile and runs
+# the 11-step script (scripts/demo_flow.py). It can run several times.
 #
-# Uso: scripts/demo.sh            (sobe, prepara e executa o roteiro)
-#      scripts/demo.sh --down     (derruba o ambiente da demonstração, mantendo o banco)
+# Usage: scripts/demo.sh          (starts, prepares and runs the script)
+#        scripts/demo.sh --down   (stops the demo environment, keeping the database)
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -14,8 +14,8 @@ if [[ "${1:-}" == "--down" ]]; then
   exit 0
 fi
 
-# Senha da operadora da demonstração: gerada uma vez e guardada fora do Git
-# (.demo/ está no .gitignore), para que reexecutar o script reutilize o mesmo usuário.
+# Password for the demo operator: generated once and kept out of Git
+# (.demo/ is in .gitignore), so running the script again reuses the same user.
 mkdir -p .demo
 if [[ ! -s .demo/admin-password ]]; then
   python3 -c 'import secrets; print(secrets.token_urlsafe(18))' > .demo/admin-password
@@ -25,15 +25,15 @@ export PULSEOPS_DEMO_USERNAME="${PULSEOPS_DEMO_USERNAME:-demo}"
 PULSEOPS_DEMO_PASSWORD="$(cat .demo/admin-password)"
 export PULSEOPS_DEMO_PASSWORD
 
-echo "==> Subindo banco, API, worker e serviços do laboratório"
+echo "==> Starting the database, API, worker and lab services"
 "${COMPOSE[@]}" up -d --build --wait db migrate api worker lab-target lab-receiver
 
-echo "==> Garantindo a operadora '${PULSEOPS_DEMO_USERNAME}'"
+echo "==> Making sure the operator '${PULSEOPS_DEMO_USERNAME}' exists"
 printf '%s\n' "$PULSEOPS_DEMO_PASSWORD" | "${COMPOSE[@]}" run --rm -T --no-deps api \
   pulseops create-admin --username "$PULSEOPS_DEMO_USERNAME" --password-stdin --exists-ok
 
-echo "==> Executando o roteiro"
+echo "==> Running the script"
 "${COMPOSE[@]}" run --rm --no-deps demo-runner
 
 echo
-echo "Painel: http://127.0.0.1:${PULSEOPS_PORT:-8000}  (usuário: ${PULSEOPS_DEMO_USERNAME}, senha em .demo/admin-password)"
+echo "Dashboard: http://127.0.0.1:${PULSEOPS_PORT:-8000}  (user: ${PULSEOPS_DEMO_USERNAME}, password in .demo/admin-password)"

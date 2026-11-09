@@ -80,7 +80,7 @@ $ uvx --from actionlint-py==1.7.7.23 actionlint .github/workflows/ci.yml
 ## Referências da documentação
 
 ```text
-$ uv run python scripts/conferir_referencias.py
+$ uv run python scripts/check_doc_references.py
 ```
 
 Resultado: 416 referências conferidas, 0 problemas (código 0). Antes de esta página e a da instalação limpa existirem, o script apontava exatamente as 4 citações a elas.

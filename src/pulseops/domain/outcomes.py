@@ -1,4 +1,4 @@
-"""Categorias de resultado de uma verificação e o que conta como falha do alvo."""
+"""Check result categories and what counts as a target failure."""
 
 from enum import StrEnum
 
@@ -15,12 +15,12 @@ class Outcome(StrEnum):
 
     @property
     def is_failure(self) -> bool:
-        """Falha do serviço monitorado (RF03.1). Erro interno do PulseOps não é falha do alvo."""
+        """Failure of the monitored service (RF03.1). PulseOps internal errors do not count."""
         return self in _FAILURES
 
     @property
     def is_success(self) -> bool:
-        """Respondeu com status aceito, rápido ou lento (RF03.2)."""
+        """Answered with an accepted status, fast or slow (RF03.2)."""
         return self in (Outcome.HEALTHY, Outcome.SLOW)
 
     @property
@@ -39,12 +39,12 @@ _FAILURES = frozenset(
 )
 
 _LABELS = {
-    Outcome.HEALTHY: "Saudável",
-    Outcome.SLOW: "Lento",
-    Outcome.UNEXPECTED_STATUS: "Status inesperado",
+    Outcome.HEALTHY: "Healthy",
+    Outcome.SLOW: "Slow",
+    Outcome.UNEXPECTED_STATUS: "Unexpected status",
     Outcome.TIMEOUT: "Timeout",
-    Outcome.CONNECTION_ERROR: "Falha de conexão/DNS",
-    Outcome.TLS_ERROR: "Falha TLS",
-    Outcome.BLOCKED: "Destino bloqueado",
-    Outcome.INTERNAL_ERROR: "Erro interno do PulseOps",
+    Outcome.CONNECTION_ERROR: "Connection/DNS failure",
+    Outcome.TLS_ERROR: "TLS failure",
+    Outcome.BLOCKED: "Destination blocked",
+    Outcome.INTERNAL_ERROR: "PulseOps internal error",
 }

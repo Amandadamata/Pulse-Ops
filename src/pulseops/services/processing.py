@@ -1,7 +1,7 @@
-"""Ciclo de uma verificação no banco: reservar → (HTTP fora daqui) → gravar resultado.
+"""Lifecycle of a check in the database: reserve -> (HTTP outside of here) -> save result.
 
-Cada função abre e fecha a própria transação curta (ADR 0003). Nenhuma delas é
-chamada com uma requisição HTTP em andamento dentro da transação.
+Each function opens and closes its own short transaction (ADR 0003). None of them is
+called with an HTTP request in progress inside the transaction.
 """
 
 import logging
@@ -30,7 +30,7 @@ from pulseops.services import incidents
 
 logger = logging.getLogger(__name__)
 
-# Folga além do timeout antes de considerar uma execução 'running' como interrompida.
+# Slack beyond the timeout before a 'running' run is considered interrupted.
 ABANDON_GRACE = timedelta(seconds=30)
 
 
@@ -50,10 +50,10 @@ def make_run_key(monitor_id: int, scheduled_at: datetime) -> str:
 async def claim_due_runs(
     sessions: SessionFactory, *, now: datetime, limit: int
 ) -> list[ClaimedRun]:
-    """Reserva até `limit` execuções vencidas e grava cada check como 'running'.
+    """Reserves up to `limit` due runs and saves each check as 'running'.
 
-    `FOR UPDATE SKIP LOCKED` evita que duas transações peguem o mesmo monitor; o índice
-    único parcial de check 'running' impede sobreposição mesmo se algo escapar disso.
+    `FOR UPDATE SKIP LOCKED` keeps two transactions from taking the same monitor; the partial
+    unique index on 'running' checks prevents overlap even if something slips past that.
     """
     if limit <= 0:
         return []
@@ -78,15 +78,17 @@ async def claim_due_runs(
 
 
 async def _reserve(session: AsyncSession, monitor: Monitor, now: datetime) -> ClaimedRun | None:
-    if monitor.next_run_at is None:  # o filtro da consulta já exclui; protege a tipagem
+    if (
+        monitor.next_run_at is None
+    ):  # the query filter already excludes it; this protects the typing
         return None
     interval = timedelta(seconds=monitor.interval_seconds)
     scheduled_at = monitor.next_run_at
     trigger = "manual" if monitor.check_requested else "scheduled"
     monitor.check_requested = False
 
-    # Retomada sem avalanche (CB4): atrasado mais de um intervalo → agenda para agora
-    # e registra o período sem checks.
+    # Resuming without an avalanche (CB4): late by more than one interval -> schedule for now
+    # and record the period without checks.
     if now - scheduled_at > interval:
         session.add(
             CoverageGap(
@@ -97,7 +99,7 @@ async def _reserve(session: AsyncSession, monitor: Monitor, now: datetime) -> Cl
             )
         )
         logger.warning(
-            "lacuna de verificação registrada",
+            "check gap recorded",
             extra={"monitor_id": monitor.id, "gap_seconds": (now - scheduled_at).total_seconds()},
         )
         scheduled_at = now
@@ -119,7 +121,7 @@ async def _reserve(session: AsyncSession, monitor: Monitor, now: datetime) -> Cl
     )
     monitor.next_run_at = max(scheduled_at + interval, now + timedelta(seconds=1))
     if check_id is None:
-        # Esta execução já existe (reprocessamento da mesma identidade): não duplica.
+        # This run already exists (reprocessing the same identity): no duplicate.
         return None
     return ClaimedRun(
         check_id=check_id,
@@ -139,17 +141,17 @@ async def _reserve(session: AsyncSession, monitor: Monitor, now: datetime) -> Cl
 async def record_result(
     sessions: SessionFactory, run: ClaimedRun, observation: CheckObservation
 ) -> bool:
-    """Grava o resultado e aplica as regras de domínio em uma única transação (CB1).
+    """Saves the result and applies the domain rules in a single transaction (CB1).
 
-    Devolve False se esta execução já tinha sido gravada (reprocessamento ignorado).
+    Returns False if this run had already been saved (reprocessing ignored).
     """
     with log_context(monitor_id=run.monitor_id, run_key=run.run_key):
         async with sessions.begin() as session:
-            # Trava o monitor: serializa com edição/pausa feitas ao mesmo tempo pela API.
+            # Locks the monitor: serializes with edits/pauses made at the same time through the API.
             monitor = await session.get(Monitor, run.monitor_id, with_for_update=True)
             check = await session.get(Check, run.check_id, with_for_update=True)
             if monitor is None or check is None or check.status != "running":
-                logger.info("resultado ignorado: execução já gravada")
+                logger.info("result ignored: run already saved")
                 return False
 
             check.status = "completed"
@@ -162,14 +164,14 @@ async def record_result(
             monitor.last_check_at = observation.finished_at
 
             if monitor.state != "active" or monitor.config_version != run.config_version:
-                # Check iniciado antes de pausa/edição: fica no histórico, mas não decide nada.
-                logger.info("resultado gravado sem efeito: monitor mudou durante a execução")
+                # Check started before a pause/edit: it stays in the history but decides nothing.
+                logger.info("result saved with no effect: the monitor changed during the run")
                 return True
 
             await session.flush()
             await _apply_domain(session, monitor, check, observation)
             logger.info(
-                "check gravado",
+                "check saved",
                 extra={
                     "outcome": observation.outcome.value,
                     "duration_ms": observation.duration_ms,
@@ -208,7 +210,7 @@ async def _apply_domain(
             failure_count=new.consecutive_failures,
             reason=decision.reason,
         )
-        logger.warning("incidente aberto", extra={"incident_id": incident.id})
+        logger.warning("incident opened", extra={"incident_id": incident.id})
     elif decision.incident_action is IncidentAction.UPDATE and open_incident is not None:
         await incidents.record_failure_on_open_incident(
             session, incident=open_incident, monitor=monitor, check=check
@@ -217,7 +219,7 @@ async def _apply_domain(
         await incidents.resolve_incident(
             session, incident=open_incident, monitor=monitor, check=check, reason=decision.reason
         )
-        logger.warning("incidente resolvido", extra={"incident_id": open_incident.id})
+        logger.warning("incident resolved", extra={"incident_id": open_incident.id})
 
     if observation.outcome is not Outcome.INTERNAL_ERROR:
         monitor.health_reason = decision.reason
@@ -237,8 +239,8 @@ async def _apply_domain(
 
 
 async def mark_abandoned_runs(sessions: SessionFactory, *, now: datetime) -> int:
-    """Checks 'running' esquecidos (worker caiu entre a requisição e a gravação) viram
-    `internal_error`. Isso não conta como falha do alvo (RF02.3, RF03.8)."""
+    """Forgotten 'running' checks (the worker died between the request and saving) become
+    `internal_error`. That does not count as a target failure (RF02.3, RF03.8)."""
     async with sessions.begin() as session:
         rows = (
             await session.execute(
@@ -255,19 +257,17 @@ async def mark_abandoned_runs(sessions: SessionFactory, *, now: datetime) -> int
             check.status = "completed"
             check.outcome = Outcome.INTERNAL_ERROR
             check.finished_at = now
-            check.explanation = "execução interrompida antes de gravar o resultado"
+            check.explanation = "run interrupted before saving the result"
             count += 1
         if count:
-            logger.warning(
-                "checks interrompidos marcados como erro interno", extra={"count": count}
-            )
+            logger.warning("interrupted checks marked as internal errors", extra={"count": count})
         return count
 
 
 async def purge_old_checks(
     sessions: SessionFactory, *, now: datetime, retention_days: int, batch_size: int = 5000
 ) -> int:
-    """Retenção (CB6): apaga checks concluídos antigos em lotes. Incidentes ficam."""
+    """Retention (CB6): deletes old finished checks in batches. Incidents stay."""
     cutoff = now - timedelta(days=retention_days)
     async with sessions.begin() as session:
         ids = (
