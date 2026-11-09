@@ -1,8 +1,8 @@
-"""Confere se os testes e arquivos citados na documentação existem de verdade.
+"""Checks that the tests and files mentioned in the documentation really exist.
 
-Procura, em docs/*.md e README.md, referências como `tests/x.py::test_y`, as formas
-abreviadas `::test_z` e `test_z` (que herdam o último arquivo citado na mesma linha) e caminhos
-de arquivos do repositório entre crases. Sai com código 1 se algo não existir.
+Looks in docs/*.md and README.md for references such as `tests/x.py::test_y`, the short
+forms `::test_z` and `test_z` (which inherit the last file mentioned on the same line) and
+repository file paths between backticks. Exits with code 1 if something does not exist.
 """
 
 import re
@@ -37,18 +37,20 @@ def main() -> int:
                 elif file_part == "" and test:
                     pass  # forma abreviada; usa o arquivo atual
                 elif re.fullmatch(r"test_\w+", token) and current is not None:
-                    test = token  # nome solto depois de um arquivo citado na mesma linha
+                    test = token  # bare name after a file mentioned on the same line
                 else:
                     continue
                 if test:
                     checked += 1
                     if current is None:
-                        problems.append(f"{doc.name}:{number}: ::{test} sem arquivo antes")
+                        problems.append(f"{doc.name}:{number}: ::{test} with no file before it")
                     elif not re.search(rf"def {re.escape(test)}\b", current.read_text()):
-                        problems.append(f"{doc.name}:{number}: {test} não existe em {current.name}")
+                        problems.append(
+                            f"{doc.name}:{number}: {test} does not exist in {current.name}"
+                        )
     for problem in problems:
         print(problem)
-    print(f"{checked} referências conferidas, {len(problems)} problemas")
+    print(f"{checked} references checked, {len(problems)} problems")
     return 1 if problems else 0
 
 

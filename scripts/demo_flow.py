@@ -1,11 +1,11 @@
-"""Roteiro do laboratório de falhas (executado pelo serviço demo-runner).
+"""Failure lab script (run by the demo-runner service).
 
-Cada passo imprime o que está verificando e encerra com código 1 se a verificação
-não se confirmar dentro do prazo. Pode ser executado várias vezes: os monitores e o
-destino são procurados pelo nome antes de serem criados.
+Each step prints what it is checking and exits with code 1 if the check is not
+confirmed in time. It can run several times: monitors and the destination are
+looked up by name before they are created.
 
-Variáveis: PULSEOPS_DEMO_API, PULSEOPS_DEMO_TARGET, PULSEOPS_DEMO_RECEIVER,
-PULSEOPS_DEMO_USERNAME e PULSEOPS_DEMO_PASSWORD.
+Variables: PULSEOPS_DEMO_API, PULSEOPS_DEMO_TARGET, PULSEOPS_DEMO_RECEIVER,
+PULSEOPS_DEMO_USERNAME and PULSEOPS_DEMO_PASSWORD.
 """
 
 import os
@@ -22,8 +22,8 @@ TOTAL_STEPS = 11
 CSRF_FIELD = re.compile(r'name="csrf_token" value="([^"]+)"')
 
 MAIN: dict[str, Any] = {
-    "name": "Lab: serviço principal",
-    "description": "Alvo controlado pelo roteiro da demonstração.",
+    "name": "Lab: main service",
+    "description": "Target controlled by the demo script.",
     "url": "http://lab-target:8081/service",
     "method": "GET",
     "interval_seconds": 3,
@@ -35,12 +35,12 @@ MAIN: dict[str, Any] = {
 }
 STABLE: dict[str, Any] = {
     **MAIN,
-    "name": "Lab: serviço estável",
-    "description": "Responde sempre 200; serve de comparação no painel.",
+    "name": "Lab: stable service",
+    "description": "Always answers 200; used for comparison on the dashboard.",
     "url": "http://lab-target:8081/stable",
     "interval_seconds": 5,
 }
-DESTINATION = {"name": "Receptor do laboratório", "url": "http://lab-receiver:8082/webhook"}
+DESTINATION = {"name": "Lab receiver", "url": "http://lab-receiver:8082/webhook"}
 
 
 class StepFailedError(Exception):
@@ -54,7 +54,7 @@ class Demo:
         self.receiver = httpx.Client(base_url=receiver, timeout=10)
         self.csrf = ""
 
-    # ---- saída e verificação -------------------------------------------------------
+    # ---- output and checks -----------------------------------------------------------
 
     @staticmethod
     def step(number: int, title: str) -> None:
@@ -71,7 +71,7 @@ class Demo:
 
     @staticmethod
     def wait_for(description: str, probe: Callable[[], T | None], timeout: float) -> T:
-        print(f"    aguardando: {description} (até {timeout:.0f} s)", flush=True)
+        print(f"    waiting for: {description} (up to {timeout:.0f} s)", flush=True)
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             value = probe()
@@ -80,13 +80,13 @@ class Demo:
             time.sleep(0.5)
         raise StepFailedError(f"tempo esgotado esperando: {description}")
 
-    # ---- API do PulseOps -------------------------------------------------------------
+    # ---- PulseOps API ---------------------------------------------------------------
 
     def login(self, username: str, password: str) -> None:
         page = self.api.get("/login")
         token = CSRF_FIELD.search(page.text)
         if not token:
-            raise StepFailedError("página de login sem token CSRF")
+            raise StepFailedError("login page without a CSRF token")
         response = self.api.post(
             "/login",
             data={"username": username, "password": password, "csrf_token": token.group(1)},
@@ -95,7 +95,7 @@ class Demo:
             raise StepFailedError(f"login recusado (HTTP {response.status_code})")
         token = CSRF_FIELD.search(self.api.get("/").text)
         if not token:
-            raise StepFailedError("painel sem token CSRF depois do login")
+            raise StepFailedError("dashboard without a CSRF token after login")
         self.csrf = token.group(1)
 
     def get(self, path: str, **params: Any) -> Any:
@@ -119,17 +119,17 @@ class Demo:
         found = self.monitors_named(spec["name"])
         if not found:
             created: dict[str, Any] = self.send("POST", "/monitors", spec)
-            self.ok(f"monitor criado: {spec['name']} (id {created['id']})")
+            self.ok(f"monitor created: {spec['name']} (id {created['id']})")
             return created
         monitor = found[0]
         self.send("PUT", f"/monitors/{monitor['id']}", spec)
         if monitor["state"] == "active" and reset:
-            # Pausar fecha um incidente que tenha sobrado de execução anterior e zera a
-            # contagem; retomar agenda a primeira verificação para já.
+            # Pausing closes an incident left over from a previous run and resets the
+            # counters; resuming schedules the first check right away.
             self.send("POST", f"/monitors/{monitor['id']}/pause")
         if monitor["state"] == "paused" or reset:
             self.send("POST", f"/monitors/{monitor['id']}/resume")
-        self.ok(f"monitor já existia e foi reaproveitado: {spec['name']} (id {monitor['id']})")
+        self.ok(f"monitor already existed and was reused: {spec['name']} (id {monitor['id']})")
         refreshed: dict[str, Any] = self.get(f"/monitors/{monitor['id']}")
         return refreshed
 
@@ -139,13 +139,13 @@ class Demo:
             if d["name"] == DESTINATION["name"]:
                 if not d["enabled"]:
                     self.send("PATCH", f"/destinations/{d['id']}", {"enabled": True})
-                self.ok(f"destino de alerta já existia: {d['name']}")
+                self.ok(f"alert destination already existed: {d['name']}")
                 return
         self.send("POST", "/destinations", {**DESTINATION, "enabled": True})
-        self.ok(f"destino de alerta criado: {DESTINATION['name']}")
+        self.ok(f"alert destination created: {DESTINATION['name']}")
 
     def checks_after(self, monitor_id: int, after_id: int) -> list[dict[str, Any]]:
-        """Checks concluídos com id maior que `after_id`, do mais antigo ao mais novo."""
+        """Finished checks with id greater than `after_id`, oldest first."""
         page = self.get(f"/monitors/{monitor_id}/checks", limit=100)
         items = [c for c in page["items"] if c["id"] > after_id and c["outcome"] is not None]
         return sorted(items, key=lambda c: c["id"])
@@ -160,10 +160,10 @@ class Demo:
         return items
 
     def settled_delivery(self, incident_id: int, event_id: str) -> dict[str, Any] | None:
-        """Entrega do evento, se já houve tentativa e o worker gravou o resultado.
+        """The event delivery, if an attempt was made and the worker saved the result.
 
-        O worker reserva a entrega (status 'sending', attempt_count + 1) antes de enviar e
-        só grava o resultado depois. Nesse intervalo a tentativa ainda não tem desfecho.
+        The worker reserves the delivery (status 'sending', attempt_count + 1) before sending and
+        only saves the result afterwards. In between, the attempt has no outcome yet.
         """
         for alert in self.get(f"/incidents/{incident_id}")["alerts"]:
             for delivery in alert["deliveries"]:
@@ -175,17 +175,17 @@ class Demo:
                     return dict(delivery)
         return None
 
-    # ---- laboratório -----------------------------------------------------------------
+    # ---- lab -------------------------------------------------------------------------
 
     def set_target(self, mode: str) -> None:
         self.target.post("/control/mode", json={"mode": mode}).raise_for_status()
-        self.ok(f"alvo do laboratório agora em modo '{mode}'")
+        self.ok(f"lab target now in '{mode}' mode")
 
     def set_receiver(self, available: bool) -> None:
         self.receiver.post(
             "/control/availability", json={"available": available}
         ).raise_for_status()
-        self.ok(f"receptor de alertas {'disponível' if available else 'indisponível (503)'}")
+        self.ok(f"alert receiver {'available' if available else 'unavailable (503)'}")
 
     def received(self) -> dict[str, Any]:
         data: dict[str, Any] = self.receiver.get("/control/received").json()
@@ -193,15 +193,15 @@ class Demo:
 
 
 def run(demo: Demo, username: str, password: str) -> None:
-    demo.step(1, "Ambiente no ar: API pronta, banco acessível e worker ativo")
+    demo.step(1, "Environment up: API ready, database reachable and worker running")
     ready = demo.api.get("/health/ready")
     demo.expect(ready.status_code == 200, f"/health/ready respondeu {ready.status_code}")
     demo.login(username, password)
-    demo.ok(f"login como '{username}'")
-    demo.wait_for("worker enviar sinal de vida", lambda: demo.get("/summary")["worker_alive"], 30)
-    demo.ok("worker ativo segundo /api/v1/summary")
+    demo.ok(f"logged in as '{username}'")
+    demo.wait_for("worker sending a heartbeat", lambda: demo.get("/summary")["worker_alive"], 30)
+    demo.ok("worker active according to /api/v1/summary")
 
-    demo.step(2, "Preparar monitores sem duplicar (idempotente)")
+    demo.step(2, "Prepare monitors without duplicates (idempotent)")
     demo.set_target("healthy")
     demo.set_receiver(True)
     demo.ensure_destination()
@@ -209,148 +209,146 @@ def run(demo: Demo, username: str, password: str) -> None:
     demo.ensure_monitor(STABLE, reset=False)
     for spec in (MAIN, STABLE):
         count = len(demo.monitors_named(spec["name"]))
-        demo.expect(
-            count == 1, f"existe exatamente 1 monitor '{spec['name']}' (encontrados {count})"
-        )
+        demo.expect(count == 1, f"there is exactly 1 monitor '{spec['name']}' (found {count})")
     mid = main["id"]
     baseline = demo.last_check_id(mid)
 
-    demo.step(3, "Verificações saudáveis")
+    demo.step(3, "Healthy checks")
     demo.wait_for(
-        "2 checks com sucesso e saúde 'healthy'",
+        "2 successful checks and 'healthy' status",
         lambda: (
             sum(c["outcome"] == "healthy" for c in demo.checks_after(mid, baseline)) >= 2
             and demo.get(f"/monitors/{mid}")["health"] == "healthy"
         ),
         30,
     )
-    demo.ok(f"motivo exibido: {demo.get(f'/monitors/{mid}')['health_reason']}")
+    demo.ok(f"reason shown: {demo.get(f'/monitors/{mid}')['health_reason']}")
     demo.set_target("slow")
     mark = demo.last_check_id(mid)
     slow = demo.wait_for(
-        "um check lento (acima de 800 ms, abaixo do timeout de 2 s)",
+        "one slow check (above 800 ms, below the 2 s timeout)",
         lambda: [c for c in demo.checks_after(mid, mark) if c["outcome"] == "slow"],
         20,
     )
     monitor = demo.get(f"/monitors/{mid}")
     demo.expect(
         monitor["health"] == "degraded" and not demo.open_incidents(mid),
-        f"lentidão ({slow[0]['duration_ms']} ms) deixa o monitor degradado sem abrir incidente",
+        f"slowness ({slow[0]['duration_ms']} ms) leaves the monitor degraded, no incident",
     )
 
-    demo.step(4, "Provocar uma falha (timeout)")
+    demo.step(4, "Cause a failure (timeout)")
     demo.set_target("timeout")
     mark = demo.last_check_id(mid)
     demo.wait_for(
-        "um check com resultado 'timeout'",
+        "one check with a 'timeout' result",
         lambda: [c for c in demo.checks_after(mid, mark) if c["outcome"] == "timeout"],
         20,
     )
     monitor = demo.get(f"/monitors/{mid}")
-    demo.expect(not demo.open_incidents(mid), "uma falha isolada ainda não abre incidente")
-    demo.ok(f"motivo exibido: {monitor['health_reason']}")
+    demo.expect(not demo.open_incidents(mid), "a single failure does not open an incident yet")
+    demo.ok(f"reason shown: {monitor['health_reason']}")
 
-    demo.step(5, "Limiar de abertura: 3 falhas consecutivas confirmam o incidente")
+    demo.step(5, "Opening threshold: 3 consecutive failures confirm the incident")
     demo.set_target("error")
-    incident = demo.wait_for("incidente aberto", lambda: demo.open_incidents(mid), 40)[0]
+    incident = demo.wait_for("open incident", lambda: demo.open_incidents(mid), 40)[0]
     demo.expect(
-        incident["opening_reason"].startswith("Incidente confirmado após 3 falhas consecutivas"),
-        f"motivo de abertura: {incident['opening_reason']}",
+        incident["opening_reason"].startswith("Incident confirmed after 3 consecutive failures"),
+        f"opening reason: {incident['opening_reason']}",
     )
     detail = demo.get(f"/incidents/{incident['id']}")
     kinds = [e["kind"] for e in detail["events"]]
     demo.expect(
         kinds[:2] == ["first_failure", "opened"],
-        f"linha do tempo começa com primeira falha e confirmação: {kinds}",
+        f"timeline starts with the first failure and the confirmation: {kinds}",
     )
     demo.wait_for(
-        "alerta incident.opened chegar ao receptor",
+        "incident.opened alert reaching the receiver",
         lambda: f"incident:{incident['id']}:opened" in demo.received()["event_ids"],
         20,
     )
-    demo.ok("receptor recebeu incident.opened")
+    demo.ok("receiver got incident.opened")
 
-    demo.step(6, "Falhas seguintes não abrem outro incidente")
+    demo.step(6, "Further failures do not open another incident")
     mark = demo.last_check_id(mid)
     demo.wait_for(
-        "mais 2 checks com falha",
+        "2 more failed checks",
         lambda: sum(c["outcome"] == "unexpected_status" for c in demo.checks_after(mid, mark)) >= 2,
         20,
     )
     still_open = demo.open_incidents(mid)
     demo.expect(
         len(still_open) == 1 and still_open[0]["id"] == incident["id"],
-        f"existe apenas UM incidente aberto (id {incident['id']})",
+        f"there is only ONE open incident (id {incident['id']})",
     )
 
-    demo.step(7, "Restaurar o alvo")
+    demo.step(7, "Restore the target")
     demo.set_target("healthy")
     mark = demo.last_check_id(mid)
     demo.wait_for(
-        "1 check com sucesso",
+        "1 successful check",
         lambda: [c for c in demo.checks_after(mid, mark) if c["outcome"] == "healthy"],
         20,
     )
     monitor = demo.get(f"/monitors/{mid}")
     if demo.open_incidents(mid):
-        demo.ok(f"um sucesso ainda não encerra: {monitor['health_reason']}")
+        demo.ok(f"one success does not close it yet: {monitor['health_reason']}")
 
-    demo.step(8, "Recuperação: 2 sucessos consecutivos encerram o incidente")
-    demo.wait_for("incidente resolvido", lambda: not demo.open_incidents(mid), 20)
+    demo.step(8, "Recovery: 2 consecutive successes close the incident")
+    demo.wait_for("incident resolved", lambda: not demo.open_incidents(mid), 20)
     resolved = demo.get(f"/incidents/{incident['id']}")["incident"]
-    demo.expect(resolved["status"] == "resolved", f"motivo: {resolved['resolution_explanation']}")
-    demo.expect(demo.get(f"/monitors/{mid}")["health"] == "healthy", "monitor voltou a 'healthy'")
+    demo.expect(resolved["status"] == "resolved", f"reason: {resolved['resolution_explanation']}")
+    demo.expect(demo.get(f"/monitors/{mid}")["health"] == "healthy", "monitor back to 'healthy'")
     demo.wait_for(
-        "alerta incident.resolved chegar ao receptor",
+        "incident.resolved alert reaching the receiver",
         lambda: f"incident:{incident['id']}:resolved" in demo.received()["event_ids"],
         20,
     )
-    demo.ok("receptor recebeu incident.resolved")
+    demo.ok("receiver got incident.resolved")
 
-    demo.step(9, "Indisponibilizar o receptor de alertas e provocar novo incidente")
+    demo.step(9, "Take the alert receiver down and cause a new incident")
     demo.set_receiver(False)
     rejected_before = demo.received()["rejected"]
     demo.set_target("error")
-    second = demo.wait_for("novo incidente aberto", lambda: demo.open_incidents(mid), 40)[0]
+    second = demo.wait_for("new open incident", lambda: demo.open_incidents(mid), 40)[0]
     event_id = f"incident:{second['id']}:opened"
 
     delivery = demo.wait_for(
-        "tentativa de entrega recusada pelo receptor",
+        "delivery attempt refused by the receiver",
         lambda: demo.settled_delivery(second["id"], event_id),
         20,
     )
     demo.expect(
         delivery["status"] == "pending" and "503" in (delivery["last_error"] or ""),
-        f"status da entrega: {delivery['status']}, último erro: {delivery['last_error']}",
+        f"delivery status: {delivery['status']}, last error: {delivery['last_error']}",
     )
-    demo.expect(demo.received()["rejected"] > rejected_before, "receptor registrou a recusa")
+    demo.expect(demo.received()["rejected"] > rejected_before, "receiver recorded the refusal")
 
-    demo.step(10, "O monitoramento continua com o receptor fora do ar")
+    demo.step(10, "Monitoring continues while the receiver is down")
     mark = demo.last_check_id(mid)
-    demo.wait_for("mais 2 checks gravados", lambda: len(demo.checks_after(mid, mark)) >= 2, 20)
+    demo.wait_for("2 more checks saved", lambda: len(demo.checks_after(mid, mark)) >= 2, 20)
     demo.expect(
         event_id not in demo.received()["event_ids"],
-        "checks continuam sendo gravados enquanto o alerta espera",
+        "checks keep being saved while the alert waits",
     )
 
-    demo.step(11, "Restaurar o receptor e ver a retentativa entregar o alerta")
+    demo.step(11, "Bring the receiver back and watch the retry deliver the alert")
     demo.set_receiver(True)
     demo.wait_for(
-        "alerta chegar ao receptor",
+        "alert reaching the receiver",
         lambda: event_id in demo.received()["event_ids"],
         30,
     )
     final = demo.wait_for(
-        "worker gravar a entrega concluída",
+        "worker saving the finished delivery",
         lambda: demo.settled_delivery(second["id"], event_id),
         20,
     )
     demo.expect(
         final["status"] == "delivered" and final["attempt_count"] >= 2,
-        f"entregue na tentativa {final['attempt_count']}",
+        f"delivered on attempt {final['attempt_count']}",
     )
-    # Entrega "pelo menos uma vez": se o mesmo evento chegar de novo, o receptor o
-    # reconhece pelo id e não processa duas vezes.
+    # "At least once" delivery: if the same event arrives again, the receiver
+    # recognizes it by id and does not process it twice.
     payload = demo.received()
     repost = demo.receiver.post(
         "/webhook", json={"type": "incident.opened"}, headers={"X-PulseOps-Event-Id": event_id}
@@ -358,16 +356,16 @@ def run(demo: Demo, username: str, password: str) -> None:
     after = demo.received()
     demo.expect(
         repost["duplicate"] and after["duplicates"] == payload["duplicates"] + 1,
-        "reenvio do mesmo evento foi reconhecido como duplicado",
+        "resending the same event was recognized as a duplicate",
     )
     demo.set_target("healthy")
-    print("\nDemonstração concluída: os 11 passos foram verificados.", flush=True)
+    print("\nDemo finished: all 11 steps were verified.", flush=True)
 
 
 def main() -> int:
     password = os.environ.get("PULSEOPS_DEMO_PASSWORD", "")
     if not password:
-        print("erro: defina PULSEOPS_DEMO_PASSWORD (o scripts/demo.sh faz isso)", file=sys.stderr)
+        print("error: set PULSEOPS_DEMO_PASSWORD (scripts/demo.sh does that)", file=sys.stderr)
         return 2
     demo = Demo(
         os.environ.get("PULSEOPS_DEMO_API", "http://api:8000"),

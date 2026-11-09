@@ -4,7 +4,7 @@ Guardado como evidência do bug B8 (`docs/registro-de-bugs.md`): com 200 monitor
 a cada 10 s, os checks começavam quase um intervalo inteiro atrasados. O resultado
 depois da correção está em `ensaio-de-carga.md`.
 
-Gerado por `scripts/ensaio_carga.sh --monitors 200 --interval 10 --duration 120` em 2026-10-22T03:47Z.
+Gerado por `scripts/load_test.sh --monitors 200 --interval 10 --duration 120` em 2026-10-22T03:47Z.
 Commit: `e8d69d9` (sem a correção do B8).
 
 ## Máquina

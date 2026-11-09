@@ -1,4 +1,4 @@
-"""Ponto de entrada: `python -m pulseops.worker`."""
+"""Entry point: `python -m pulseops.worker`."""
 
 import asyncio
 import logging
@@ -21,14 +21,14 @@ from pulseops.worker.runner import Worker
 
 logger = logging.getLogger("pulseops.worker")
 
-# Chave do advisory lock que garante um único worker por banco (ADR 0002).
+# Advisory lock key that guarantees a single worker per database (ADR 0002).
 WORKER_LOCK_KEY = 0x50554C53  # "PULS"
 
 
 async def try_acquire_worker_lock(conn: AsyncConnection) -> bool:
-    """Lock de sessão do PostgreSQL: só uma conexão por banco consegue segurá-lo."""
+    """PostgreSQL session lock: only one connection per database can hold it."""
     got = await conn.scalar(text("SELECT pg_try_advisory_lock(:k)"), {"k": WORKER_LOCK_KEY})
-    await conn.commit()  # o lock é de sessão: continua valendo depois do commit
+    await conn.commit()  # the lock is session-level: it still holds after commit
     return bool(got)
 
 
@@ -39,12 +39,14 @@ async def main() -> int:
     sessions = create_session_factory(engine)
     clock = SystemClock()
     policy = DestinationPolicy(settings.allowed_port_set, settings.demo_allowlist)
-    user_agent = f"PulseOps/{__version__} (+monitoramento)"
+    user_agent = f"PulseOps/{__version__} (+monitoring)"
 
-    # Conexão dedicada que segura o lock enquanto o processo vive.
+    # Dedicated connection that holds the lock while the process lives.
     async with engine.connect() as lock_conn:
         if not await try_acquire_worker_lock(lock_conn):
-            logger.error("outro worker já está rodando neste banco; apenas um é suportado")
+            logger.error(
+                "another worker is already running on this database; only one is supported"
+            )
             await engine.dispose()
             return 1
 
@@ -72,7 +74,7 @@ async def main() -> int:
             await check_client.aclose()
             await webhook_client.aclose()
     await engine.dispose()
-    logger.info("worker encerrado")
+    logger.info("worker stopped")
     return 0
 
 

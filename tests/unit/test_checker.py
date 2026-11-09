@@ -1,4 +1,4 @@
-"""Classificação dos checks (RF02): cenários 2, 3 e 4."""
+"""Check classification (RF02): scenarios 2, 3 and 4."""
 
 import asyncio
 import ssl
@@ -13,7 +13,7 @@ from pulseops.security.url_policy import UnsafeDestinationError
 from tests.support import FakeClock, ScriptedTarget
 
 TARGET = CheckTarget(
-    url="https://api.example.com/health?token=segredo",
+    url="https://api.example.com/health?token=secret",
     method="GET",
     timeout_seconds=5,
     latency_threshold_ms=1000,
@@ -30,22 +30,22 @@ async def check_with(mode: str) -> tuple[Outcome, str, int | None]:
 
 
 async def test_healthy() -> None:
-    assert await check_with("ok") == (Outcome.HEALTHY, "HTTP 200 em 20 ms", 200)
+    assert await check_with("ok") == (Outcome.HEALTHY, "HTTP 200 in 20 ms", 200)
 
 
 async def test_slow_200_is_slow_not_failure() -> None:
-    """Cenário 2."""
+    """Scenario 2."""
     outcome, explanation, status = await check_with("slow")
     assert (outcome, status) == (Outcome.SLOW, 200)
-    assert explanation == "HTTP 200 em 1520 ms (limite 1000 ms)"
+    assert explanation == "HTTP 200 in 1520 ms (limit 1000 ms)"
     assert not outcome.is_failure
 
 
 async def test_unexpected_status() -> None:
-    """Cenário 3."""
+    """Scenario 3."""
     assert await check_with("error") == (
         Outcome.UNEXPECTED_STATUS,
-        "HTTP 500 fora dos status aceitos (200-299)",
+        "HTTP 500 outside the accepted statuses (200-299)",
         500,
     )
 
@@ -53,13 +53,13 @@ async def test_unexpected_status() -> None:
 @pytest.mark.parametrize(
     ("mode", "outcome", "text"),
     [
-        ("timeout", Outcome.TIMEOUT, "sem resposta em 5 s"),
-        ("refused", Outcome.CONNECTION_ERROR, "conexão recusada"),
-        ("tls", Outcome.TLS_ERROR, "certificado"),
+        ("timeout", Outcome.TIMEOUT, "no response in 5 s"),
+        ("refused", Outcome.CONNECTION_ERROR, "connection refused"),
+        ("tls", Outcome.TLS_ERROR, "certificate"),
     ],
 )
 async def test_network_and_tls_failures(mode: str, outcome: Outcome, text: str) -> None:
-    """Cenário 4."""
+    """Scenario 4."""
     got, explanation, status = await check_with(mode)
     assert got is outcome and text in explanation and status is None
 
@@ -71,13 +71,13 @@ async def test_dns_failure_is_connection_error() -> None:
         try:
             raise socket.gaierror(-2, "Name or service not known")
         except socket.gaierror as exc:
-            raise httpx.ConnectError("falha", request=request) from exc
+            raise httpx.ConnectError("failure", request=request) from exc
 
     checker = HttpChecker(httpx.AsyncClient(transport=httpx.MockTransport(handler)), FakeClock())
     obs = await checker.check(TARGET)
     assert (obs.outcome, obs.explanation) == (
         Outcome.CONNECTION_ERROR,
-        "falha de DNS: nome não resolvido",
+        "DNS failure: name not resolved",
     )
 
 
@@ -103,7 +103,7 @@ async def test_total_deadline_is_enforced() -> None:
 
 
 async def test_redirect_is_not_followed() -> None:
-    """T4: 302 para a rede interna é só um status, não é seguido."""
+    """T4: a 302 to the internal network is just a status; it is not followed."""
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -118,16 +118,16 @@ async def test_redirect_is_not_followed() -> None:
 
 async def test_blocked_destination_at_connect_time() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        raise UnsafeDestinationError("api.example.com aponta para endereço privado (10.0.0.1)")
+        raise UnsafeDestinationError("api.example.com points to private address (10.0.0.1)")
 
     checker = HttpChecker(httpx.AsyncClient(transport=httpx.MockTransport(handler)), FakeClock())
     obs = await checker.check(TARGET)
-    assert obs.outcome is Outcome.BLOCKED and "política de rede" in obs.explanation
+    assert obs.outcome is Outcome.BLOCKED and "network policy" in obs.explanation
 
 
 async def test_unexpected_exception_is_internal_error_not_target_failure() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        raise KeyError("bug do PulseOps")
+        raise KeyError("PulseOps bug")
 
     checker = HttpChecker(httpx.AsyncClient(transport=httpx.MockTransport(handler)), FakeClock())
     obs = await checker.check(TARGET)
@@ -137,11 +137,11 @@ async def test_unexpected_exception_is_internal_error_not_target_failure() -> No
 async def test_explanation_never_contains_url_or_query() -> None:
     for mode in ("ok", "slow", "error", "timeout", "refused", "tls"):
         _, explanation, _ = await check_with(mode)
-        assert "segredo" not in explanation and "api.example.com" not in explanation
+        assert "secret" not in explanation and "api.example.com" not in explanation
 
 
 async def test_body_is_not_read() -> None:
-    """RF02.4: um corpo enorme não é baixado."""
+    """RF02.4: a huge body is not downloaded."""
     produced = 0
 
     async def huge_body():

@@ -184,7 +184,7 @@ CI. O mypy confere os tipos (`files` inclui `scripts`).
   Qualquer outra exceção aparece com *traceback*, o que é o desejado para um bug do
   próprio roteiro.
 
-## `scripts/ensaio_carga.py`
+## `scripts/load_test.py`
 
 **Finalidade.** O ensaio de carga local: cria N monitores, deixa o worker rodar por
 um tempo fixo enquanto clientes consultam a API, e mede o que aconteceu. Foi com
@@ -192,18 +192,18 @@ ele que o bug B8 apareceu.
 
 **Dados.** Argumentos `--monitors` (200), `--interval` (10 s), `--duration`
 (120 s) e `--api-clients` (4). Produz um relatório em Markdown na saída padrão.
-**Relações.** Chamado por `scripts/ensaio_carga.sh` dentro do `demo-runner`. Os
+**Relações.** Chamado por `scripts/load_test.sh` dentro do `demo-runner`. Os
 resultados estão em `docs/evidencias/ensaio-de-carga.md` e
 `docs/evidencias/ensaio-de-carga-antes-B8.md`. **Testes.** Não há; é uma ferramenta
 de medição.
 
-@@trecho scripts/ensaio_carga.py 32-36
+@@trecho scripts/load_test.py 32-36
 
 - O percentil *nearest-rank*, o mesmo critério do p95 do produto (volume 1, parte F).
   `-(-a // b)` é um truque para arredondar a divisão **para cima** só com divisão
   inteira.
 
-@@trecho scripts/ensaio_carga.py 112-151
+@@trecho scripts/load_test.py 112-151
 
 - Linhas 115–121: login e token CSRF num cabeçalho padrão do cliente, usado em todas
   as chamadas.
@@ -221,18 +221,18 @@ de medição.
 - Linhas 150–151: arquiva os monitores do ensaio, para não ficarem verificando
   depois.
 
-@@trecho scripts/ensaio_carga.py 153-192
+@@trecho scripts/load_test.py 153-192
 
 - Linha 154: checks esperados = monitores × janela ÷ intervalo.
 - Linhas 156–162: o atraso de cada check é `started_at - scheduled_at`, em ms.
 - O restante imprime as medidas: mediana, p95 e máximo.
 
-## `scripts/ensaio_carga.sh`
+## `scripts/load_test.sh`
 
 **Finalidade.** Embrulha o ensaio: registra a máquina, roda o Python e grava o
 relatório em `docs/evidencias/ensaio-de-carga.md`.
 
-@@arquivo scripts/ensaio_carga.sh
+@@arquivo scripts/load_test.sh
 
 - Linhas 14–30: o cabeçalho do relatório: data, commit, sistema, CPUs, memória,
   versão do Docker e a concorrência real do worker (lida de dentro do contêiner).
@@ -244,7 +244,7 @@ relatório em `docs/evidencias/ensaio-de-carga.md`.
 - Linhas 48–52: o aviso de leitura: os números valem para esta máquina e esta
   configuração.
 
-## `scripts/conferir_referencias.py`
+## `scripts/check_doc_references.py`
 
 **Finalidade.** Confere que os arquivos e testes citados na documentação existem.
 É a regra R5 (confirmar antes de citar) transformada em programa.
@@ -254,7 +254,7 @@ original. Imprime os problemas e sai com 1 se houver algum. **Relações.** Pass
 "Referências da documentação" do CI. **Testes.** Não há teste próprio; o CI o executa
 sobre a documentação real.
 
-@@arquivo scripts/conferir_referencias.py
+@@arquivo scripts/check_doc_references.py
 
 - Linha 13: pega todo texto entre crases sem espaços.
 - Linha 14: só confere textos que começam com uma pasta do projeto.
@@ -267,12 +267,12 @@ sobre a documentação real.
   fontes deste guia (que ficam em `study/`; o `study/build.py` faz a conferência dos
   trechos por conta própria).
 
-## `scripts/capturar_telas.mjs`
+## `scripts/capture_screenshots.mjs`
 
 **Finalidade.** Tira as capturas de tela de `docs/imagens/` com o Playwright, num
 navegador Chromium sem janela. Opcional; não faz parte dos testes.
 
-@@arquivo scripts/capturar_telas.mjs
+@@arquivo scripts/capture_screenshots.mjs
 
 - Linhas 7–10: a URL vem da variável `PULSEOPS_URL` ou usa a local; a senha vem de
   `.demo/admin-password`, nunca do código.

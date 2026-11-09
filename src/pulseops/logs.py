@@ -1,4 +1,4 @@
-"""Logs em JSON com contexto (monitor, execução, incidente) e mascaramento de segredos."""
+"""JSON logs with context (monitor, run, incident) and secret masking."""
 
 import json
 import logging
@@ -15,7 +15,7 @@ _SENSITIVE_KEYS = ("password", "senha", "token", "secret", "authorization", "coo
 _URL_QUERY = re.compile(r"(https?://[^\s?#\"']+)\?[^\s\"'#]*")
 _URL_USERINFO = re.compile(r"(https?://)[^/\s@\"']+@")
 
-# Atributos que todo LogRecord tem; o resto veio de `extra=` e vai para o JSON.
+# Attributes every LogRecord has; the rest came from `extra=` and goes into the JSON.
 _RESERVED = set(vars(logging.LogRecord("", 0, "", 0, "", (), None))) | {"message", "asctime"}
 
 
@@ -34,7 +34,7 @@ def redact_value(key: str, value: Any) -> Any:
 
 @contextmanager
 def log_context(**fields: Any) -> Iterator[None]:
-    """Acrescenta campos a todos os logs emitidos dentro do bloco (inclusive em corrotinas)."""
+    """Adds fields to every log emitted inside the block (including in coroutines)."""
     current = _context.get() or {}
     token = _context.set({**current, **fields})
     try:
@@ -67,7 +67,7 @@ def configure_logging(level: str = "INFO") -> None:
     root = logging.getLogger()
     root.handlers[:] = [handler]
     root.setLevel(level.upper())
-    # O log de acesso do uvicorn imprime a URL inteira; o nosso formatador mascara a query.
+    # uvicorn's access log prints the whole URL; our formatter masks the query string.
     for name in ("uvicorn", "uvicorn.access", "uvicorn.error"):
         logging.getLogger(name).handlers[:] = []
         logging.getLogger(name).propagate = True

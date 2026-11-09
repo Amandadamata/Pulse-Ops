@@ -1,4 +1,4 @@
-"""Cenários 9, 10, 14 e 15 e restrições do banco."""
+"""Scenarios 9, 10, 14 and 15 and database constraints."""
 
 import asyncio
 from datetime import timedelta
@@ -29,7 +29,7 @@ from tests.support_db import (
 
 
 async def test_reprocessed_result_is_ignored(sessions: SessionFactory, clock: FakeClock) -> None:
-    """Cenário 9: gravar duas vezes o resultado da mesma execução não duplica nada."""
+    """Scenario 9: saving the result of the same run twice duplicates nothing."""
     monitor = await create_monitor(sessions, clock, failure_threshold=1)
     target = ScriptedTarget(clock)
     target.mode = "error"
@@ -52,7 +52,7 @@ async def test_same_run_identity_cannot_be_reserved_twice(
     [run] = await processing.claim_due_runs(sessions, now=clock.now(), limit=5)
     await processing.record_result(sessions, run, await target.checker().check(run.target))
 
-    # Simula o agendador voltando ao mesmo horário previsto (por exemplo, após restaurar backup).
+    # Simulates the scheduler going back to the same planned time (e.g. after restoring a backup).
     async with sessions.begin() as session:
         stored = await session.get(Check, run.check_id)
         assert stored is not None
@@ -63,11 +63,11 @@ async def test_same_run_identity_cannot_be_reserved_twice(
 
 
 async def test_overlapping_check_is_not_started(sessions: SessionFactory, clock: FakeClock) -> None:
-    """Cenário 10: com um check em andamento, nem agendador nem "verificar agora" iniciam outro."""
+    """Scenario 10: with a check in progress, neither the scheduler nor "check now" starts one."""
     monitor = await create_monitor(sessions, clock)
     [run] = await processing.claim_due_runs(sessions, now=clock.now(), limit=5)
 
-    clock.advance(120)  # passou do próximo horário com o primeiro ainda rodando
+    clock.advance(120)  # past the next scheduled time with the first one still running
     assert await processing.claim_due_runs(sessions, now=clock.now(), limit=5) == []
     async with sessions.begin() as session:
         await monitor_service.request_check_now(session, monitor.id, now=clock.now())
@@ -121,7 +121,7 @@ async def test_database_rejects_second_open_incident(
                     recovery_threshold=1,
                     timeout_seconds=5,
                     latency_threshold_ms=1000,
-                    opening_reason="duplicado",
+                    opening_reason="duplicate",
                     failure_count=1,
                     last_outcome="timeout",
                     last_explanation="x",
@@ -144,11 +144,13 @@ async def test_concurrent_claims_never_take_the_same_monitor(
 async def test_interrupted_run_becomes_internal_error_not_failure(
     sessions: SessionFactory, clock: FakeClock
 ) -> None:
-    """Falha entre a requisição e a gravação (RF03.8)."""
+    """Failure between the request and saving (RF03.8)."""
     monitor = await create_monitor(sessions, clock, failure_threshold=1)
     [run] = await processing.claim_due_runs(sessions, now=clock.now(), limit=5)
     clock.advance(10)
-    assert await processing.mark_abandoned_runs(sessions, now=clock.now()) == 0  # ainda no prazo
+    assert (
+        await processing.mark_abandoned_runs(sessions, now=clock.now()) == 0
+    )  # still within the deadline
     clock.advance(30)
     assert await processing.mark_abandoned_runs(sessions, now=clock.now()) == 1
     async with sessions() as session:
@@ -163,17 +165,19 @@ async def test_interrupted_run_becomes_internal_error_not_failure(
 async def test_database_failure_while_recording_does_not_count_as_target_failure(
     sessions: SessionFactory, clock: FakeClock, settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Cenário 15: o banco cai entre a requisição e a gravação."""
+    """Scenario 15: the database goes down between the request and saving."""
     monitor = await create_monitor(sessions, clock, failure_threshold=1)
     target = ScriptedTarget(clock)
-    target.mode = "error"  # o alvo está mesmo com erro, mas o resultado não chega ao banco
+    target.mode = (
+        "error"  # the target really is failing, but the result does not reach the database
+    )
     worker = make_worker(sessions, clock, target, settings)
 
     async def database_down(*args: object, **kwargs: object) -> bool:
         raise OperationalError("UPDATE checks", {}, Exception("connection refused"))
 
     monkeypatch.setattr(processing, "record_result", database_down)
-    assert await worker.run_checks_once() == 1  # não propaga a exceção
+    assert await worker.run_checks_once() == 1  # does not propagate the exception
     monkeypatch.undo()
 
     clock.advance(60)
@@ -182,14 +186,14 @@ async def test_database_failure_while_recording_does_not_count_as_target_failure
     assert await incidents_of(sessions, monitor.id) == []
     assert (await reload(sessions, monitor.id)).consecutive_failures == 0
 
-    await worker.run_checks_once()  # banco voltou: a verificação seguinte conta normalmente
+    await worker.run_checks_once()  # database is back: the next check counts normally
     assert len(await incidents_of(sessions, monitor.id)) == 1
 
 
 async def test_worker_loop_survives_unreachable_database(
     settings: Settings, clock: FakeClock
 ) -> None:
-    """Cenário 15: com o banco fora do ar, os laços registram o erro e continuam vivos."""
+    """Scenario 15: with the database down, the loops log the error and stay alive."""
     dead = create_engine("postgresql+psycopg://pulseops:x@127.0.0.1:1/nada", pool_size=1)
     fast = settings.model_copy(
         update={"worker_tick_seconds": 0.01, "heartbeat_interval_seconds": 0.01}
@@ -211,7 +215,7 @@ async def test_worker_loop_survives_unreachable_database(
 
 
 async def test_second_worker_is_refused(engine: AsyncEngine) -> None:
-    """Um único worker suportado (ADR 0002), garantido pelo banco."""
+    """A single supported worker (ADR 0002), guaranteed by the database."""
     async with engine.connect() as first, engine.connect() as second:
         assert await try_acquire_worker_lock(first) is True
         assert await try_acquire_worker_lock(second) is False
@@ -225,7 +229,7 @@ async def test_second_worker_is_refused(engine: AsyncEngine) -> None:
 async def test_stopped_worker_makes_data_stale(
     api: httpx.AsyncClient, sessions: SessionFactory, clock: FakeClock, settings: Settings
 ) -> None:
-    """Cenário 14: sem heartbeat recente, nada aparece como saudável."""
+    """Scenario 14: without a recent heartbeat, nothing shows as healthy."""
     monitor = await create_monitor(sessions, clock)
     target = ScriptedTarget(clock)
     worker = make_worker(sessions, clock, target, settings)
@@ -236,14 +240,14 @@ async def test_stopped_worker_makes_data_stale(
     assert (fresh["health"], fresh["stale"]) == ("healthy", False)
     assert (await api.get("/api/v1/summary")).json()["worker_alive"] is True
 
-    clock.advance(settings.worker_stale_after_seconds + 1)  # worker parou de mandar sinal
+    clock.advance(settings.worker_stale_after_seconds + 1)  # the worker stopped sending heartbeats
     stale = (await api.get(f"/api/v1/monitors/{monitor.id}")).json()
     assert stale["stale"] is True
     summary = (await api.get("/api/v1/summary")).json()
     assert summary["worker_alive"] is False and summary["stale"] == 1
     assert summary["by_health"].get("healthy", 0) == 0
     page = await api.get("/")
-    assert "Worker sem sinal" in page.text and "Dados desatualizados" in page.text
+    assert "Worker silent" in page.text and "Stale data" in page.text
 
 
 async def test_old_last_check_is_stale_even_with_worker_alive(
@@ -253,7 +257,7 @@ async def test_old_last_check_is_stale_even_with_worker_alive(
     worker = make_worker(sessions, clock, ScriptedTarget(clock), settings)
     await worker.run_checks_once()
     clock.advance(2 * 60 + 5 + 31)
-    await worker.heartbeat()  # worker vivo, mas este monitor não foi verificado
+    await worker.heartbeat()  # worker alive, but this monitor was not checked
     assert (await api.get(f"/api/v1/monitors/{monitor.id}")).json()["stale"] is True
 
 
@@ -263,7 +267,7 @@ async def test_scheduled_time_and_observed_time_are_both_recorded(
     monitor = await create_monitor(sessions, clock)
     worker = make_worker(sessions, clock, ScriptedTarget(clock), settings)
     created_at = clock.now()
-    clock.advance(1.5)  # o worker pegou a execução com 1,5 s de atraso
+    clock.advance(1.5)  # the worker picked up the run 1.5 s late
     await worker.run_checks_once()
     async with sessions() as session:
         check = (await session.scalars(select(Check).where(Check.monitor_id == monitor.id))).one()
@@ -275,13 +279,13 @@ async def test_scheduled_time_and_observed_time_are_both_recorded(
 async def test_dispatcher_refills_freed_slots_without_waiting_a_tick(
     sessions: SessionFactory, clock: FakeClock, settings: Settings
 ) -> None:
-    """B8: com mais checks vencidos que vagas, o laço não dorme o tick inteiro entre lotes.
+    """B8: with more due checks than slots, the loop does not sleep the whole tick between batches.
 
-    Com 2 vagas, 6 monitores vencidos e tick de 2 s, o comportamento antigo levava pelo
-    menos 4 s (um lote por tick); o atual termina assim que as vagas se liberam.
+    With 2 slots, 6 due monitors and a 2 s tick, the old behavior took at least
+    4 s (one batch per tick); the current one finishes as soon as slots free up.
     """
     for n in range(6):
-        await create_monitor(sessions, clock, name=f"fila {n}")
+        await create_monitor(sessions, clock, name=f"queue {n}")
     tight = settings.model_copy(update={"worker_concurrency": 2, "worker_tick_seconds": 2.0})
     worker = make_worker(sessions, clock, ScriptedTarget(clock), tight)
     stop = asyncio.Event()

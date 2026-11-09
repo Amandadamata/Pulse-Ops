@@ -9,7 +9,7 @@
 | Unidade do verificador | `tests/unit/test_checker.py` | Classificação de cada resultado (lento, status, timeout, rede, TLS, bloqueado, erro interno) | transporte HTTP (`httpx.MockTransport` via `ScriptedTarget`) e relógio (`FakeClock`) |
 | Integração com PostgreSQL | `tests/integration/` | Restrições do banco, transações, worker + persistência, outbox, API, páginas, métricas em SQL, migrações | só o alvo HTTP, o notificador e o relógio. **O banco é PostgreSQL 16 real**; SQLite não é usado |
 | Laboratório | `scripts/demo.sh` | O sistema inteiro em containers, com rede de verdade, alvo e receptor controláveis | nada: processos reais |
-| Carga local | `scripts/ensaio_carga.sh` | Vazão e atraso do worker e latência da API sob 200 monitores | nada; números valem só para a máquina registrada |
+| Carga local | `scripts/load_test.sh` | Vazão e atraso do worker e latência da API sob 200 monitores | nada; números valem só para a máquina registrada |
 | Interface | `tests/integration/test_dashboard.py` + capturas em `docs/imagens/` | Fluxos principais, escape de conteúdo, estados vazio, sem dados e desatualizado | as capturas foram feitas com Chromium (Playwright) sobre a demo real |
 
 ## Princípios
@@ -66,7 +66,7 @@ uv run pytest                     # suíte completa
 uv run pytest tests/unit          # só unidade (sem banco)
 uv run pytest --cov               # com cobertura
 uv run ruff check . && uv run ruff format --check . && uv run mypy
-uv run python scripts/conferir_referencias.py   # testes citados nos docs existem
+uv run python scripts/check_doc_references.py   # testes citados nos docs existem
 scripts/demo.sh                   # laboratório (11 passos)
 ```
 

@@ -512,7 +512,7 @@ Os demais templates:
 **Relações.** Carregado por `base.html`; lê `/api/v1/summary`. **Testes.**
 `test_javascript_has_no_token` confere que o arquivo não contém nenhum token. O
 comportamento no navegador não tem teste automático; foi conferido nas capturas de
-tela (`scripts/capturar_telas.mjs`, D9).
+tela (`scripts/capture_screenshots.mjs`, D9).
 
 @@arquivo src/pulseops/web/static/app.js
 

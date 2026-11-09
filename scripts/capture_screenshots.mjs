@@ -1,6 +1,6 @@
-// Captura as telas usadas no README e em docs/imagens/ (opcional; não faz parte dos testes).
-// Requer Node e o pacote "playwright" com Chromium, e a demonstração no ar (scripts/demo.sh).
-// Uso: node scripts/capturar_telas.mjs <pasta-de-saida> '[["painel","/"],["monitor","/monitors/1"]]'
+// Captures the screenshots used in the README and docs/imagens/ (optional; not part of the tests).
+// Needs Node, the "playwright" package with Chromium, and the demo running (scripts/demo.sh).
+// Usage: node scripts/capture_screenshots.mjs <output-folder> '[["dashboard","/"],["monitor","/monitors/1"]]'
 import { chromium } from 'playwright';
 import fs from 'node:fs';
 

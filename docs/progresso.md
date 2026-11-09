@@ -90,7 +90,7 @@ Entregue: revisão de segurança (modelo de ameaças com referências exatas aos
 testes; teste de SQL injection; inspeção do container), cobertura com metas,
 ensaio de carga, `docs/arquitetura.md`, `docs/estrategia-de-testes.md`,
 `docs/operacao.md`, `docs/matriz-de-rastreabilidade.md`,
-`scripts/conferir_referencias.py`. Bugs B7, B8 e B9 encontrados e corrigidos.
+`scripts/check_doc_references.py`. Bugs B7, B8 e B9 encontrados e corrigidos.
 Como verifiquei: `pip-audit` sem vulnerabilidades conhecidas; cobertura 95%
 (domínio 98%, segurança 97%); `docker inspect` mostrou usuário `pulseops`
 (uid 10001), raiz somente leitura, `cap_drop ALL`, banco sem porta publicada;

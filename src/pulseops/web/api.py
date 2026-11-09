@@ -1,4 +1,4 @@
-"""API JSON em /api/v1. Todas as rotas exigem sessão (RF08.4)."""
+"""JSON API at /api/v1. Every route requires a session (RF08.4)."""
 
 from datetime import datetime, timedelta
 from typing import Annotated
@@ -98,7 +98,7 @@ async def create_monitor(body: MonitorIn, db: Db, state: State, _: ApiAuth) -> M
 async def get_monitor(monitor_id: int, db: Db, state: State, _: ApiAuth) -> MonitorOut:
     items = await _monitor_out(db, state, [monitor_id])
     if not items:
-        raise HTTPException(404, f"monitor {monitor_id} não encontrado")
+        raise HTTPException(404, f"monitor {monitor_id} not found")
     return items[0]
 
 
@@ -133,7 +133,7 @@ async def monitor_action(
         "check": monitor_service.request_check_now,
     }
     if action not in operations:
-        raise HTTPException(404, "ação desconhecida")
+        raise HTTPException(404, "unknown action")
     try:
         await operations[action](db, monitor_id, now=state.clock.now())
     except (NotFoundError, ConflictError) as exc:
@@ -185,7 +185,7 @@ async def monitor_metrics(
     end = end or now
     start = start or end - timedelta(hours=24)
     if start >= end:
-        raise HTTPException(422, "'from' deve ser anterior a 'to'")
+        raise HTTPException(422, "'from' must be before 'to'")
     m = await queries.monitor_metrics(db, monitor_id, start=start, end=end, now=now)
     return MetricsOut(
         start=m.start,
@@ -206,9 +206,9 @@ async def monitor_metrics(
 
 
 def _require_aware(*values: datetime | None) -> None:
-    """Datas sem fuso seriam ambíguas; a API exige UTC explícito (por exemplo, sufixo Z)."""
+    """Dates without a timezone are ambiguous; the API requires explicit UTC (e.g. a Z suffix)."""
     if any(v is not None and v.tzinfo is None for v in values):
-        raise HTTPException(422, "datas precisam de fuso horário (use Z para UTC)")
+        raise HTTPException(422, "dates need a timezone (use Z for UTC)")
 
 
 @router.get("/incidents")
@@ -257,7 +257,7 @@ def _alert_out(view: queries.AlertView) -> AlertOut:
 async def get_incident(incident_id: int, db: Db, _: ApiAuth) -> IncidentDetailOut:
     detail = await queries.incident_detail(db, incident_id)
     if detail is None:
-        raise HTTPException(404, f"incidente {incident_id} não encontrado")
+        raise HTTPException(404, f"incident {incident_id} not found")
     return IncidentDetailOut(
         incident=IncidentOut.model_validate(detail.incident),
         events=[IncidentEventOut.model_validate(e) for e in detail.events],
@@ -300,7 +300,7 @@ async def create_destination(
     try:
         await db.commit()
     except IntegrityError as exc:
-        raise HTTPException(409, "já existe um destino com este nome") from exc
+        raise HTTPException(409, "a destination with this name already exists") from exc
     return DestinationOut.model_validate(destination)
 
 
@@ -310,7 +310,7 @@ async def update_destination(
 ) -> DestinationOut:
     destination = await db.get(AlertDestination, destination_id)
     if destination is None:
-        raise HTTPException(404, "destino não encontrado")
+        raise HTTPException(404, "destination not found")
     destination.enabled = body.enabled
     destination.updated_at = state.clock.now()
     await db.commit()

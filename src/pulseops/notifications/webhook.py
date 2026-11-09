@@ -1,4 +1,4 @@
-"""Envio de eventos para um webhook genérico (RF06)."""
+"""Sends events to a generic webhook (RF06)."""
 
 import asyncio
 from typing import Any, Protocol
@@ -35,9 +35,11 @@ class WebhookNotifier:
             return SendResult(ok, permanent, status, elapsed, error)
 
         try:
-            self._policy.validate_url(url)  # a URL pode ter sido cadastrada com outra política
+            self._policy.validate_url(
+                url
+            )  # the URL may have been registered under a different policy
             async with asyncio.timeout(self._timeout):
-                # stream(): só os cabeçalhos são lidos; o corpo da resposta é descartado.
+                # stream(): only the headers are read; the response body is discarded.
                 async with self._client.stream(
                     "POST",
                     url,
@@ -47,11 +49,11 @@ class WebhookNotifier:
                 ) as response:
                     status_code = response.status_code
         except UnsafeDestinationError as exc:
-            return result(False, True, None, f"destino bloqueado: {exc}")
+            return result(False, True, None, f"destination blocked: {exc}")
         except (TimeoutError, httpx.TimeoutException):
-            return result(False, False, None, f"sem resposta em {self._timeout:g} s")
+            return result(False, False, None, f"no response in {self._timeout:g} s")
         except httpx.TransportError as exc:
-            return result(False, False, None, f"erro de rede ({type(exc).__name__})")
+            return result(False, False, None, f"network error ({type(exc).__name__})")
 
         if 200 <= status_code < 300:
             return result(True, False, status_code, None)

@@ -1,4 +1,4 @@
-"""Cenário 1: configuração inválida (RF01)."""
+"""Scenario 1: invalid configuration (RF01)."""
 
 from dataclasses import replace
 

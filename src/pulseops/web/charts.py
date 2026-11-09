@@ -1,4 +1,4 @@
-"""Gráfico de latência em SVG, montado no servidor a partir dos checks reais (ADR 0010)."""
+"""Latency chart in SVG, built on the server from real checks (ADR 0010)."""
 
 from dataclasses import dataclass
 
@@ -6,7 +6,7 @@ from pulseops.services.queries import RESPONSE_OUTCOMES, LatencyPoint
 
 WIDTH, HEIGHT = 720, 220
 PAD_LEFT, PAD_RIGHT, PAD_TOP, PAD_BOTTOM = 56, 12, 12, 28
-ACCEPTED = ("healthy", "slow")  # status aceito; o resto é desenhado como falha
+ACCEPTED = ("healthy", "slow")  # accepted status; anything else is drawn as a failure
 
 
 @dataclass(frozen=True)
@@ -55,17 +55,17 @@ def build_latency_chart(points: list[LatencyPoint], threshold_ms: int) -> Latenc
         for i, p in enumerate(points)
     ]
     ticks = [(y_of(top_value * f), f"{top_value * f:.0f} ms") for f in (0, 0.25, 0.5, 0.75)]
-    # Mesma base da latência média e do p95 (RF05): checks que receberam resposta HTTP,
-    # inclusive com status fora da lista. Timeout e erro de conexão ficam fora do resumo,
-    # porque a duração deles mede o prazo ou a falha, não a resposta (B9, B10).
+    # Same base as the average latency and p95 (RF05): checks that got an HTTP response,
+    # including a status outside the list. Timeouts and connection errors stay out of the summary,
+    # because their duration measures the deadline or the failure, not the response (B9, B10).
     responses = [p.duration_ms for p in points if p.outcome in RESPONSE_OUTCOMES]
     failures = sum(1 for d in dots if d.failed)
     latency = (
-        f"latência das respostas HTTP: mínima {min(responses)} ms, máxima {max(responses)} ms"
+        f"HTTP response latency: min {min(responses)} ms, max {max(responses)} ms"
         if responses
-        else "nenhuma resposta HTTP"
+        else "no HTTP responses"
     )
-    summary = f"{len(points)} checks ({failures} com falha); {latency}; limite {threshold_ms} ms."
+    summary = f"{len(points)} checks ({failures} failed); {latency}; limit {threshold_ms} ms."
     return LatencyChart(
         width=WIDTH,
         height=HEIGHT,

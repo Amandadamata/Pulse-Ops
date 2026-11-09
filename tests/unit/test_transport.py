@@ -1,4 +1,4 @@
-"""Transporte protegido: valida e conecta no mesmo IP (T3, T7) e mantém Host/SNI."""
+"""Protected transport: validates and connects to the same IP (T3, T7) and keeps Host/SNI."""
 
 import ipaddress
 
@@ -50,9 +50,9 @@ class RecordingBackend(httpcore.AsyncNetworkBackend):
 
 def guarded_client(resolver: FakeResolver, inner: RecordingBackend):
     client = build_guarded_client(
-        DestinationPolicy(), max_connections=5, user_agent="teste", resolver=resolver
+        DestinationPolicy(), max_connections=5, user_agent="test", resolver=resolver
     )
-    # Mesmo backend protegido, mas o socket "de verdade" é o de gravação.
+    # Same protected backend, but the "real" socket is the recording one.
     client._transport._pool._network_backend = GuardedNetworkBackend(
         DestinationPolicy(), resolver, inner
     )  # type: ignore[attr-defined]
@@ -65,12 +65,12 @@ async def test_connects_to_validated_ip_and_keeps_host_header() -> None:
     async with guarded_client(resolver, inner) as client:
         response = await client.get("http://api.example.com/health")
     assert response.status_code == 204
-    assert inner.connections == [("93.184.216.34", 80)]  # conectou no IP validado
-    assert b"Host: api.example.com\r\n" in inner.stream.written  # Host original preservado
+    assert inner.connections == [("93.184.216.34", 80)]  # connected to the validated IP
+    assert b"Host: api.example.com\r\n" in inner.stream.written  # original Host kept
 
 
 async def test_rebinding_is_checked_at_connect_time() -> None:
-    """O nome era público no cadastro e passa a apontar para a rede interna."""
+    """The name was public when registered and later points to the internal network."""
     resolver = FakeResolver({"rebind.example.com": ["93.184.216.34"]})
     await validate_destination(DestinationPolicy(), "http://rebind.example.com/", resolver)
 
@@ -79,15 +79,15 @@ async def test_rebinding_is_checked_at_connect_time() -> None:
     async with guarded_client(resolver, inner) as client:
         with pytest.raises(UnsafeDestinationError, match="loopback"):
             await client.get("http://rebind.example.com/")
-    assert inner.connections == []  # nenhuma conexão foi aberta
+    assert inner.connections == []  # no connection was opened
 
 
 async def test_mixed_public_and_private_answers_are_refused() -> None:
-    resolver = FakeResolver({"misto.example.com": ["93.184.216.34", "10.0.0.7"]})
+    resolver = FakeResolver({"mixed.example.com": ["93.184.216.34", "10.0.0.7"]})
     inner = RecordingBackend()
     async with guarded_client(resolver, inner) as client:
-        with pytest.raises(UnsafeDestinationError, match="privado"):
-            await client.get("http://misto.example.com/")
+        with pytest.raises(UnsafeDestinationError, match="private"):
+            await client.get("http://mixed.example.com/")
     assert inner.connections == []
 
 
@@ -98,7 +98,7 @@ async def test_name_resolving_to_metadata_is_refused_at_registration() -> None:
 
 
 async def test_unresolvable_name_is_accepted_at_registration() -> None:
-    await validate_destination(DestinationPolicy(), "https://fora-do-ar.invalid/", FakeResolver())
+    await validate_destination(DestinationPolicy(), "https://offline.invalid/", FakeResolver())
 
 
 async def test_dns_failure_becomes_connect_error() -> None:
@@ -111,7 +111,7 @@ async def test_name_without_addresses_is_refused() -> None:
     backend = GuardedNetworkBackend(
         DestinationPolicy(), FakeResolver({"vazio.example": []}), RecordingBackend()
     )
-    with pytest.raises(httpcore.ConnectError, match="não tem endereços"):
+    with pytest.raises(httpcore.ConnectError, match="has no addresses"):
         await backend.connect_tcp("vazio.example", 443)
 
 
@@ -122,7 +122,7 @@ async def test_unix_sockets_are_refused() -> None:
 
 
 async def test_system_resolver_uses_getaddrinfo_and_its_answer_is_validated() -> None:
-    """`localhost` resolve pelo /etc/hosts, sem rede; o resultado é loopback e seria recusado."""
+    """`localhost` resolves through /etc/hosts, offline; the result is loopback and is refused."""
     addresses = await SystemResolver().resolve("localhost", 80)
     assert addresses and all(a.is_loopback for a in addresses)
     backend = GuardedNetworkBackend(DestinationPolicy(), SystemResolver(), RecordingBackend())
@@ -131,7 +131,7 @@ async def test_system_resolver_uses_getaddrinfo_and_its_answer_is_validated() ->
 
 
 async def test_clients_ignore_proxy_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    """T7: com HTTP(S)_PROXY definido, a conexão continua indo direto ao IP validado."""
+    """T7: with HTTP(S)_PROXY set, the connection still goes straight to the validated IP."""
     monkeypatch.setenv("HTTP_PROXY", "http://10.9.9.9:3128")
     monkeypatch.setenv("HTTPS_PROXY", "http://10.9.9.9:3128")
     resolver = FakeResolver({"api.example.com": ["93.184.216.34"]})

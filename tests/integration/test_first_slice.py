@@ -1,4 +1,4 @@
-"""Etapa 3: cadastrar monitor → worker verifica → resultado persistido → consulta pela API."""
+"""Step 3: register a monitor -> worker checks -> result persisted -> query through the API."""
 
 import httpx
 
@@ -19,7 +19,7 @@ async def test_monitor_created_by_api_is_checked_by_worker_and_listed(
 ) -> None:
     created = await api.post(
         "/api/v1/monitors",
-        json={"name": "API de pedidos", "url": "https://pedidos.example.com/health"},
+        json={"name": "Orders API", "url": "https://orders.example.com/health"},
     )
     assert created.status_code == 201, created.text
     monitor = created.json()
@@ -34,7 +34,7 @@ async def test_monitor_created_by_api_is_checked_by_worker_and_listed(
         settings=settings,
     )
     assert await worker.run_checks_once() == 1
-    assert target.requests[0].url == "https://pedidos.example.com/health"
+    assert target.requests[0].url == "https://orders.example.com/health"
 
     page = (await api.get(f"/api/v1/monitors/{monitor['id']}/checks")).json()
     assert len(page["items"]) == 1
@@ -42,7 +42,7 @@ async def test_monitor_created_by_api_is_checked_by_worker_and_listed(
     assert check["outcome"] == "healthy"
     assert check["status_code"] == 200
     assert check["run_key"].startswith(f"{monitor['id']}:")
-    assert check["duration_ms"] == 20  # medido pelo relógio monotônico controlado
+    assert check["duration_ms"] == 20  # measured by the controlled monotonic clock
 
     detail = (await api.get(f"/api/v1/monitors/{monitor['id']}")).json()
     assert detail["health"] == "healthy"

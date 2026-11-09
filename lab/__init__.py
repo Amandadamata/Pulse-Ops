@@ -1,1 +1,1 @@
-"""Laboratório de falhas: serviços locais controláveis, usados só no perfil `demo`."""
+"""Failure lab: controllable local services, used only in the `demo` profile."""

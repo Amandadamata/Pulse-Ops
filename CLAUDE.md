@@ -17,10 +17,10 @@ uv run pytest                             # testes (o banco pulseops_test é rec
 uv run pytest --cov                       # cobertura; metas em docs/estrategia-de-testes.md
 uv run ruff check . && uv run ruff format --check .
 uv run mypy
-uv run python scripts/conferir_referencias.py   # testes e arquivos citados nos docs existem
+uv run python scripts/check_doc_references.py   # testes e arquivos citados nos docs existem
 docker compose up -d --build --wait       # API + worker + banco
 scripts/demo.sh                           # laboratório de falhas (perfil demo, 11 passos)
-scripts/ensaio_carga.sh                   # ensaio de carga (com a demo no ar)
+scripts/load_test.sh                   # ensaio de carga (com a demo no ar)
 ```
 
 Neste ambiente de desenvolvimento, o build da imagem precisou de

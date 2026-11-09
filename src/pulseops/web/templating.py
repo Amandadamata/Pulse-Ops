@@ -1,4 +1,4 @@
-"""Configuração do Jinja2 e filtros de formatação usados nos templates."""
+"""Jinja2 configuration and formatting filters used in the templates."""
 
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -12,14 +12,14 @@ from jinja2.runtime import Context
 from pulseops.domain.health import Health
 from pulseops.domain.outcomes import Outcome
 
-# autoescape=True: todo valor inserido no HTML é escapado (proteção contra XSS, T12).
+# autoescape=True: every value inserted into the HTML is escaped (XSS protection, T12).
 _env = Environment(loader=FileSystemLoader(Path(__file__).parent / "templates"), autoescape=True)
 templates = Jinja2Templates(env=_env)
 
 
 @pass_context
 def local_datetime(context: Context, value: datetime | None) -> str:
-    """Converte de UTC para o fuso de exibição configurado (RF05.6)."""
+    """Converts from UTC to the configured display timezone (RF05.6)."""
     if value is None:
         return "—"
     tz: ZoneInfo = context["tz"]
@@ -63,21 +63,21 @@ def outcome_label(value: str | None) -> str:
         return value
 
 
-STATE_LABELS = {"active": "Ativo", "paused": "Pausado", "archived": "Arquivado"}
-INCIDENT_LABELS = {"open": "Aberto", "resolved": "Resolvido", "closed": "Encerrado sem recuperação"}
+STATE_LABELS = {"active": "Active", "paused": "Paused", "archived": "Archived"}
+INCIDENT_LABELS = {"open": "Open", "resolved": "Resolved", "closed": "Closed without recovery"}
 DELIVERY_LABELS = {
-    "pending": "Aguardando",
-    "sending": "Enviando",
-    "delivered": "Entregue",
-    "failed": "Falhou",
+    "pending": "Pending",
+    "sending": "Sending",
+    "delivered": "Delivered",
+    "failed": "Failed",
 }
 EVENT_LABELS = {
-    "first_failure": "Primeira falha",
-    "opened": "Incidente confirmado",
-    "error_changed": "Tipo de falha mudou",
-    "config_changed": "Configuração alterada",
-    "resolved": "Recuperado",
-    "closed": "Encerrado pelo operador",
+    "first_failure": "First failure",
+    "opened": "Incident confirmed",
+    "error_changed": "Failure type changed",
+    "config_changed": "Configuration changed",
+    "resolved": "Recovered",
+    "closed": "Closed by the operator",
 }
 
 filters: dict[str, Any] = {

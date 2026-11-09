@@ -1,4 +1,4 @@
-"""Cenários 5 a 8 e 11 a 13 com PostgreSQL real, worker real e alvo simulado."""
+"""Scenarios 5 to 8 and 11 to 13 with a real PostgreSQL, a real worker and a simulated target."""
 
 from sqlalchemy import select
 
@@ -21,7 +21,7 @@ from tests.support_db import (
 async def test_threshold_example_with_database(
     sessions: SessionFactory, clock: FakeClock, settings: Settings
 ) -> None:
-    """Exemplo obrigatório do RF03 de ponta a ponta (cenários 5, 6 e 8)."""
+    """The required RF03 example end to end (scenarios 5, 6 and 8)."""
     monitor = await create_monitor(sessions, clock)
     target = ScriptedTarget(clock)
     worker = make_worker(sessions, clock, target, settings)
@@ -31,7 +31,7 @@ async def test_threshold_example_with_database(
     await tick(worker, clock)
     target.mode = "ok"
     await tick(worker, clock)
-    assert await incidents_of(sessions, monitor.id) == []  # falha, falha, sucesso
+    assert await incidents_of(sessions, monitor.id) == []  # failure, failure, success
 
     target.mode = "timeout"
     for _ in range(3):
@@ -39,11 +39,11 @@ async def test_threshold_example_with_database(
     opened = await incidents_of(sessions, monitor.id)
     assert len(opened) == 1 and opened[0].status == "open"
     assert opened[0].opening_reason == (
-        "Incidente confirmado após 3 falhas consecutivas; último resultado: sem resposta em 5 s."
+        "Incident confirmed after 3 consecutive failures; last result: no response in 5 s."
     )
-    assert opened[0].started_at < opened[0].confirmed_at  # primeira falha antes da confirmação
+    assert opened[0].started_at < opened[0].confirmed_at  # first failure before the confirmation
 
-    for _ in range(4):  # novas falhas atualizam o mesmo incidente
+    for _ in range(4):  # new failures update the same incident
         await tick(worker, clock)
     same = await incidents_of(sessions, monitor.id)
     assert len(same) == 1 and same[0].failure_count == 7
@@ -55,7 +55,7 @@ async def test_threshold_example_with_database(
     resolved = (await incidents_of(sessions, monitor.id))[0]
     assert resolved.status == "resolved"
     assert resolved.resolution_explanation is not None
-    assert resolved.resolution_explanation.startswith("Recuperado após 2 sucessos consecutivos")
+    assert resolved.resolution_explanation.startswith("Recovered after 2 consecutive successes")
 
     async with sessions() as session:
         kinds = list(await session.scalars(select(AlertEvent.kind).order_by(AlertEvent.id)))
@@ -64,14 +64,14 @@ async def test_threshold_example_with_database(
                 select(IncidentEvent.kind).order_by(IncidentEvent.occurred_at, IncidentEvent.id)
             )
         )
-    assert kinds == ["incident.opened", "incident.resolved"]  # nada a cada falha repetida
+    assert kinds == ["incident.opened", "incident.resolved"]  # nothing on each repeated failure
     assert timeline == ["first_failure", "opened", "resolved"]
 
 
 async def test_alternating_results_do_not_open_incident(
     sessions: SessionFactory, clock: FakeClock, settings: Settings
 ) -> None:
-    """Cenário 7."""
+    """Scenario 7."""
     monitor = await create_monitor(sessions, clock)
     target = ScriptedTarget(clock)
     worker = make_worker(sessions, clock, target, settings)
@@ -106,7 +106,7 @@ async def test_error_type_change_is_recorded_on_timeline(
 async def test_pause_closes_open_incident_and_resume_starts_clean(
     sessions: SessionFactory, clock: FakeClock, settings: Settings
 ) -> None:
-    """Cenário 11 e ADR 0006."""
+    """Scenario 11 and ADR 0006."""
     monitor = await create_monitor(sessions, clock, failure_threshold=2)
     target = ScriptedTarget(clock)
     worker = make_worker(sessions, clock, target, settings)
@@ -122,16 +122,16 @@ async def test_pause_closes_open_incident_and_resume_starts_clean(
     paused = await reload(sessions, monitor.id)
     assert (paused.state, paused.health, paused.consecutive_failures) == ("paused", "paused", 0)
 
-    assert await tick(worker, clock) == 0  # pausado não é verificado
+    assert await tick(worker, clock) == 0  # a paused monitor is not checked
 
     async with sessions.begin() as session:
         await monitor_service.resume_monitor(session, monitor.id, now=clock.now())
     assert (await reload(sessions, monitor.id)).health == "no_data"
-    await tick(worker, clock)  # ainda com erro: 1 falha, abaixo do limiar
+    await tick(worker, clock)  # still failing: 1 failure, below the threshold
     assert len(await incidents_of(sessions, monitor.id)) == 1
     await tick(worker, clock)
     incidents = await incidents_of(sessions, monitor.id)
-    assert [i.status for i in incidents] == ["closed", "open"]  # novo incidente após retomar
+    assert [i.status for i in incidents] == ["closed", "open"]  # new incident after resuming
 
     async with sessions() as session:
         kinds = list(await session.scalars(select(AlertEvent.kind).order_by(AlertEvent.id)))
@@ -141,7 +141,7 @@ async def test_pause_closes_open_incident_and_resume_starts_clean(
 async def test_config_change_resets_counters_and_keeps_incident(
     sessions: SessionFactory, clock: FakeClock, settings: Settings
 ) -> None:
-    """Cenário 12 (RF03.5)."""
+    """Scenario 12 (RF03.5)."""
     monitor = await create_monitor(sessions, clock, failure_threshold=2, recovery_threshold=1)
     target = ScriptedTarget(clock)
     worker = make_worker(sessions, clock, target, settings)
@@ -155,12 +155,12 @@ async def test_config_change_resets_counters_and_keeps_incident(
     assert (changed.consecutive_failures, changed.consecutive_successes) == (0, 0)
     incident = (await incidents_of(sessions, monitor.id))[0]
     assert incident.status == "open"
-    assert incident.recovery_threshold == 1  # retrato da abertura não muda
+    assert incident.recovery_threshold == 1  # the snapshot from the opening does not change
 
     target.mode = "ok"
     for _ in range(2):
         await tick(worker, clock)
-    assert (await incidents_of(sessions, monitor.id))[0].status == "open"  # agora exige 3
+    assert (await incidents_of(sessions, monitor.id))[0].status == "open"  # now it needs 3
     await tick(worker, clock)
     assert (await incidents_of(sessions, monitor.id))[0].status == "resolved"
 
@@ -185,15 +185,15 @@ async def test_result_of_run_started_before_config_change_does_not_count(
     observation = await target.checker().check(runs[0].target)
     assert await record_result(sessions, runs[0], observation) is True
     after = await reload(sessions, monitor.id)
-    assert after.consecutive_failures == 0  # gravado no histórico, sem efeito no domínio
+    assert after.consecutive_failures == 0  # saved in the history, with no effect on the domain
     assert await incidents_of(sessions, monitor.id) == []
 
 
 async def test_result_of_run_started_before_pause_and_resume_does_not_count(
     sessions: SessionFactory, clock: FakeClock, settings: Settings
 ) -> None:
-    """Pausar e retomar enquanto um check está em andamento: o resultado dele foi
-    observado em parte com o monitor pausado e não pode contar para a nova contagem."""
+    """Pausing and resuming while a check is in progress: its result was partly
+    observed with the monitor paused and must not count toward the new count."""
     monitor = await create_monitor(sessions, clock, failure_threshold=1)
     target = ScriptedTarget(clock)
     target.mode = "error"
@@ -214,7 +214,7 @@ async def test_result_of_run_started_before_pause_and_resume_does_not_count(
 async def test_restart_with_open_incident_continues_and_records_gap(
     sessions: SessionFactory, clock: FakeClock, settings: Settings
 ) -> None:
-    """Cenário 13 e CB4: novo processo continua o mesmo incidente; atraso vira lacuna."""
+    """Scenario 13 and CB4: a new process continues the same incident; the delay becomes a gap."""
     monitor = await create_monitor(sessions, clock, failure_threshold=2)
     target = ScriptedTarget(clock)
     first = make_worker(sessions, clock, target, settings)
@@ -223,9 +223,9 @@ async def test_restart_with_open_incident_continues_and_records_gap(
     await tick(first, clock)
     assert (await incidents_of(sessions, monitor.id))[0].status == "open"
 
-    clock.advance(3600)  # worker ficou uma hora parado
+    clock.advance(3600)  # the worker was stopped for an hour
     second = make_worker(sessions, clock, target, settings)
-    assert await second.run_checks_once() == 1  # uma execução, não 60 atrasadas
+    assert await second.run_checks_once() == 1  # one run, not 60 late ones
     incidents = await incidents_of(sessions, monitor.id)
     assert len(incidents) == 1 and incidents[0].failure_count == 3
 

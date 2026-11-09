@@ -1,4 +1,4 @@
-"""Contratos JSON da API (entrada e saída)."""
+"""API JSON contracts (input and output)."""
 
 from datetime import datetime
 from typing import Literal
@@ -9,7 +9,7 @@ from pulseops.domain.monitor_rules import MAX_DESCRIPTION, MAX_NAME, MAX_URL, Mo
 
 
 class MonitorIn(BaseModel):
-    """Limites de tipo e tamanho aqui; regras combinadas em domain/monitor_rules.py."""
+    """Type and size limits here; combined rules in domain/monitor_rules.py."""
 
     model_config = ConfigDict(extra="forbid")
 

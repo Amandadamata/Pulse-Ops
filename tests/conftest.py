@@ -1,8 +1,8 @@
-"""Fixtures compartilhadas.
+"""Shared fixtures.
 
-Os testes de integração usam um PostgreSQL real (nunca SQLite). A URL vem de
-PULSEOPS_TEST_DATABASE_URL; o banco de teste é recriado do zero a cada execução
-e as migrações do Alembic são aplicadas nele.
+Integration tests use a real PostgreSQL (never SQLite). The URL comes from
+PULSEOPS_TEST_DATABASE_URL; the test database is recreated from scratch on every run
+and the Alembic migrations are applied to it.
 """
 
 import os
@@ -29,7 +29,7 @@ TEST_DATABASE_URL = os.environ.get(
     "PULSEOPS_TEST_DATABASE_URL",
     "postgresql+psycopg://pulseops:pulseops@127.0.0.1:5433/pulseops_test",
 )
-ADMIN_USER, ADMIN_PASSWORD = "operadora", "senha-de-teste-123"
+ADMIN_USER, ADMIN_PASSWORD = "operadora", "test-password-123"
 
 
 def _recreate_database(url: str) -> None:
@@ -64,7 +64,7 @@ async def engine(database_url: str) -> AsyncIterator[AsyncEngine]:
 
 @pytest.fixture
 async def sessions(engine: AsyncEngine) -> SessionFactory:
-    """Banco limpo para cada teste (TRUNCATE em todas as tabelas)."""
+    """Clean database for each test (TRUNCATE on every table)."""
     tables = ", ".join(f'"{t.name}"' for t in Base.metadata.sorted_tables)
     async with engine.begin() as conn:
         await conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
@@ -103,7 +103,7 @@ CSRF_FIELD = re.compile(r'name="csrf_token" value="([^"]+)"')
 async def login(
     client: httpx.AsyncClient, username: str = ADMIN_USER, password: str = ADMIN_PASSWORD
 ) -> str:
-    """Faz login pelo formulário e devolve o token CSRF da sessão."""
+    """Logs in through the form and returns the session's CSRF token."""
     page = await client.get("/login")
     login_csrf = CSRF_FIELD.search(page.text)
     assert login_csrf
@@ -126,7 +126,7 @@ async def operator(sessions: SessionFactory, clock: FakeClock) -> None:
 
 @pytest.fixture
 async def api(app_client: httpx.AsyncClient, operator: None) -> httpx.AsyncClient:
-    """Cliente autenticado; o header X-CSRF-Token já vai em todas as requisições."""
+    """Authenticated client; the X-CSRF-Token header goes with every request."""
     token = await login(app_client)
     app_client.headers["X-CSRF-Token"] = token
     return app_client

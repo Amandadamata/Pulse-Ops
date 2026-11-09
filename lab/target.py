@@ -1,14 +1,14 @@
-"""Alvo controlável do laboratório.
+"""Controllable lab target.
 
-GET /service responde conforme o modo atual:
-- healthy: 200 imediato
-- slow: 200 depois de SLOW_SECONDS (acima do limite de latência da demo)
+GET /service answers according to the current mode:
+- healthy: 200 right away
+- slow: 200 after SLOW_SECONDS (above the demo latency limit)
 - error: 500
-- timeout: espera TIMEOUT_SECONDS (mais que o timeout da demo)
+- timeout: waits TIMEOUT_SECONDS (longer than the demo timeout)
 
-GET /stable responde sempre 200 (segundo monitor da demo, que nunca falha).
+GET /stable always answers 200 (the second demo monitor, which never fails).
 
-POST /control/mode {"mode": "..."} troca o modo. Só existe dentro da rede do Compose.
+POST /control/mode {"mode": "..."} changes the mode. It only exists inside the Compose network.
 """
 
 import asyncio
@@ -40,7 +40,7 @@ async def service() -> PlainTextResponse:
     elif mode == "timeout":
         await asyncio.sleep(TIMEOUT_SECONDS)
     elif mode == "error":
-        return PlainTextResponse("erro simulado", status_code=500)
+        return PlainTextResponse("simulated error", status_code=500)
     return PlainTextResponse("ok")
 
 

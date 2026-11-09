@@ -1,13 +1,13 @@
-# Laboratório de falhas. Use sempre junto com compose.yaml e o perfil "demo":
+# Failure lab. Always use it together with compose.yaml and the "demo" profile:
 #   docker compose -f compose.yaml -f compose.demo.yaml --profile demo up -d --wait
-# (o script scripts/demo.sh faz isso e executa o roteiro).
+# (scripts/demo.sh does that and runs the script).
 #
-# O que muda em relação ao ambiente padrão:
-# - API e worker rodam em modo demonstração: intervalo mínimo de 2 s e uma lista
-#   NOMINAL de destinos internos liberados (só lab-target:8081 e lab-receiver:8082).
-#   Nenhum outro endereço privado é liberado.
-# - Retentativa de webhook mais curta, para a demonstração não esperar minutos.
-# - Três serviços extras, todos no perfil "demo" e sem portas publicadas no host.
+# What changes compared with the default environment:
+# - The API and worker run in demo mode: 2 s minimum interval and a NAMED list of
+#   allowed internal destinations (only lab-target:8081 and lab-receiver:8082).
+#   No other private address is allowed.
+# - Shorter webhook retries, so the demo does not wait for minutes.
+# - Three extra services, all in the "demo" profile and with no ports published on the host.
 
 x-demo-env: &demo-env
   PULSEOPS_DEMO_MODE: "true"
@@ -50,8 +50,8 @@ services:
       timeout: 5s
       retries: 20
 
-  # Executa o roteiro (scripts/demo_flow.py) de dentro da rede do Compose, que é o
-  # único lugar de onde os controles do laboratório são alcançáveis.
+  # Runs the script (scripts/demo_flow.py) from inside the Compose network, which is the
+  # only place where the lab controls can be reached.
   demo-runner:
     <<: *lab
     command: ["python", "scripts/demo_flow.py"]

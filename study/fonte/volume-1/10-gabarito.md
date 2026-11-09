@@ -116,7 +116,7 @@ if obs.outcome is Outcome.SLOW:
 `src/pulseops/config.py` (padrão), `.env.example`, a tabela de variáveis em
 `docs/operacao.md`, RF06.5 em `docs/requisitos.md` e o texto da parte G e de H11
 deste guia. O `compose.demo.yaml` define 20 para a demonstração e não muda. Rode
-`uv run python scripts/conferir_referencias.py` e a suíte.
+`uv run python scripts/check_doc_references.py` e a suíte.
 
 ## Nível 4
 

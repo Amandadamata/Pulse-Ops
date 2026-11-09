@@ -1,7 +1,7 @@
-"""Worker: agenda verificações, entrega alertas e faz manutenção (ADR 0002).
+"""Worker: schedules checks, delivers alerts and does maintenance (ADR 0002).
 
-Os três laços rodam no mesmo processo, mas em tarefas `asyncio` separadas. Assim
-um webhook lento não atrasa nenhuma verificação (RF06.3).
+The three loops run in the same process, but in separate `asyncio` tasks. This way
+a slow webhook never delays a check (RF06.3).
 """
 
 import asyncio
@@ -49,23 +49,23 @@ class Worker:
         self.worker_id = worker_id or f"{socket.gethostname()}:{os.getpid()}"
         self._started_at = clock.now()
         self._inflight: set[asyncio.Task[None]] = set()
-        # Sinalizado sempre que um check termina e libera uma vaga (ver _wait_after_dispatch).
+        # Signaled whenever a check finishes and frees a slot (see _wait_after_dispatch).
         self._slot_freed = asyncio.Event()
         self._last_retention = self._started_at - RETENTION_EVERY
 
-    # ---- verificações -------------------------------------------------------------
+    # ---- checks --------------------------------------------------------------------
 
     async def dispatch_checks(self) -> int:
-        """Reserva execuções para as vagas livres e dispara cada uma em uma tarefa.
+        """Reserves runs for the free slots and starts each one in a task.
 
-        O número de tarefas em andamento nunca passa de `worker_concurrency`: esse é o
-        limite de concorrência das verificações.
+        The number of running tasks never exceeds `worker_concurrency`: that is the
+        concurrency limit for checks.
         """
         claimed, _ = await self._dispatch()
         return claimed
 
     async def _dispatch(self) -> tuple[int, int]:
-        """Devolve (reservadas, vagas pedidas)."""
+        """Returns (reserved, slots requested)."""
         free = self._settings.worker_concurrency - len(self._inflight)
         runs = await processing.claim_due_runs(self._sessions, now=self._clock.now(), limit=free)
         for run in runs:
@@ -79,9 +79,9 @@ class Worker:
         self._slot_freed.set()
 
     async def _wait_after_dispatch(self, claimed: int, requested: int) -> None:
-        """Se todas as vagas pedidas foram preenchidas, pode haver fila: volta assim que
-        uma vaga abrir, em vez de dormir o tick inteiro (bug B8). Se vieram menos
-        execuções que vagas, nada mais está vencido e o tick normal basta."""
+        """If every requested slot was filled, there may be a queue: come back as soon as
+        a slot opens, instead of sleeping the whole tick (bug B8). If fewer runs came
+        back than slots, nothing else is due and the normal tick is enough."""
         tick = self._settings.worker_tick_seconds
         if claimed < requested:
             await asyncio.sleep(tick)
@@ -94,7 +94,7 @@ class Worker:
             await asyncio.gather(*self._inflight, return_exceptions=True)
 
     async def run_checks_once(self) -> int:
-        """Usado pelos testes: reserva, executa e grava tudo que estiver vencido agora."""
+        """Used by the tests: reserves, runs and saves everything that is due right now."""
         count = await self.dispatch_checks()
         await self.wait_inflight()
         return count
@@ -103,8 +103,10 @@ class Worker:
         with log_context(monitor_id=run.monitor_id, run_key=run.run_key):
             try:
                 observation = await self._checker.check(run.target)
-            except Exception as exc:  # o verificador já trata erros; isto é a última barreira
-                logger.exception("erro inesperado no verificador")
+            except (
+                Exception
+            ) as exc:  # the checker already handles errors; this is the last safety net
+                logger.exception("unexpected error in the checker")
                 now = self._clock.now()
                 observation = CheckObservation(
                     Outcome.INTERNAL_ERROR,
@@ -112,16 +114,16 @@ class Worker:
                     now,
                     0,
                     None,
-                    f"erro interno ({type(exc).__name__})",
+                    f"internal error ({type(exc).__name__})",
                 )
             try:
                 await processing.record_result(self._sessions, run, observation)
             except Exception:
-                # Banco fora do ar, por exemplo. O check fica 'running' e a manutenção o marca
-                # como interrompido depois; nada é contado como falha do alvo.
-                logger.exception("falha ao gravar resultado do check")
+                # The database is down, for example. The check stays 'running' and maintenance marks
+                # it as interrupted later; nothing counts as a target failure.
+                logger.exception("failed to save the check result")
 
-    # ---- alertas ------------------------------------------------------------------
+    # ---- alerts -------------------------------------------------------------------
 
     async def run_deliveries_once(self) -> int:
         s = self._settings
@@ -149,16 +151,16 @@ class Worker:
                     backoff_max=s.webhook_backoff_max_seconds,
                 )
             except Exception:
-                logger.exception("falha ao gravar tentativa de entrega")
+                logger.exception("failed to save the delivery attempt")
                 return
             level = logging.INFO if result.ok else logging.WARNING
             logger.log(
                 level,
-                "tentativa de entrega",
+                "delivery attempt",
                 extra={"attempt": item.attempt_number, "status": status, "error": result.error},
             )
 
-    # ---- manutenção ---------------------------------------------------------------
+    # ---- maintenance ---------------------------------------------------------------
 
     async def heartbeat(self) -> None:
         now = self._clock.now()
@@ -185,9 +187,9 @@ class Worker:
             )
             self._last_retention = now
             if removed:
-                logger.info("retenção: checks antigos removidos", extra={"count": removed})
+                logger.info("retention: old checks removed", extra={"count": removed})
 
-    # ---- laço principal -----------------------------------------------------------
+    # ---- main loop -----------------------------------------------------------------
 
     async def run(self, stop: asyncio.Event) -> None:
         s = self._settings
@@ -200,7 +202,7 @@ class Worker:
             ),
         ]
         await asyncio.gather(*loops)
-        logger.info("aguardando checks em andamento terminarem")
+        logger.info("waiting for checks in progress to finish")
         await self.wait_inflight()
 
     async def _check_loop(self, stop: asyncio.Event) -> None:
@@ -214,7 +216,7 @@ class Worker:
                 failures += 1
                 delay = min(self._settings.worker_tick_seconds * 2**failures, 30.0)
                 logger.exception(
-                    "erro no laço do worker", extra={"loop": "checks", "retry_in": delay}
+                    "error in the worker loop", extra={"loop": "checks", "retry_in": delay}
                 )
                 with contextlib.suppress(TimeoutError):
                     await asyncio.wait_for(stop.wait(), timeout=delay)
@@ -235,11 +237,13 @@ class Worker:
                 failures = 0
                 delay = every
             except Exception:
-                # Banco indisponível, por exemplo: registra e tenta de novo com espera crescente,
-                # sem derrubar o processo e sem afetar os outros laços.
+                # The database is down, for example: log it and try again with a growing wait,
+                # without bringing down the process and without affecting the other loops.
                 failures += 1
                 delay = min(every * 2**failures, 30.0)
-                logger.exception("erro no laço do worker", extra={"loop": name, "retry_in": delay})
-            # Espera o intervalo, mas acorda na hora se o processo receber sinal de parada.
+                logger.exception(
+                    "error in the worker loop", extra={"loop": name, "retry_in": delay}
+                )
+            # Waits for the interval, but wakes up right away if the process receives a stop signal.
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=delay)

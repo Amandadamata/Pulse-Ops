@@ -1,4 +1,4 @@
-"""Operador, login e sessões (RF08, ADR 0008)."""
+"""Operator, login and sessions (RF08, ADR 0008)."""
 
 import hashlib
 import secrets
@@ -21,9 +21,9 @@ async def create_operator(
 ) -> Operator:
     username = username.strip()
     if not 3 <= len(username) <= 50:
-        raise ValueError("o usuário precisa ter de 3 a 50 caracteres")
+        raise ValueError("the username must have 3 to 50 characters")
     if await session.scalar(select(Operator.id).where(Operator.username == username)):
-        raise ValueError(f"o usuário {username!r} já existe")
+        raise ValueError(f"the user {username!r} already exists")
     operator = Operator(username=username, password_hash=hash_password(password), created_at=now)
     session.add(operator)
     await session.flush()
@@ -32,7 +32,7 @@ async def create_operator(
 
 async def authenticate(session: AsyncSession, username: str, password: str) -> Operator | None:
     operator = await session.scalar(select(Operator).where(Operator.username == username.strip()))
-    # verify_password roda mesmo sem usuário, para não revelar quais usuários existem pelo tempo.
+    # verify_password runs even without a user, so timing does not reveal which users exist.
     if verify_password(operator.password_hash if operator else None, password):
         return operator
     return None
@@ -40,7 +40,7 @@ async def authenticate(session: AsyncSession, username: str, password: str) -> O
 
 @dataclass(frozen=True)
 class NewSession:
-    token: str  # vai para o cookie; o banco guarda só o hash
+    token: str  # goes into the cookie; the database stores only the hash
     csrf_token: str
     expires_at: datetime
 
@@ -60,7 +60,7 @@ async def start_session(
             expires_at=expires_at,
         )
     )
-    # Aproveita o login para limpar sessões vencidas.
+    # Uses the login to clean up expired sessions.
     await session.execute(delete(OperatorSession).where(OperatorSession.expires_at <= now))
     return NewSession(token, csrf_token, expires_at)
 

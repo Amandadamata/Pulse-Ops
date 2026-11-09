@@ -1,6 +1,6 @@
 {% macro health_badge(health, stale=False) -%}
   {%- if stale -%}
-  <span class="badge badge-stale">Dados desatualizados</span>
+  <span class="badge badge-stale">Stale data</span>
   {%- else -%}
   <span class="badge badge-{{ health }}">{{ health | health_label }}</span>
   {%- endif -%}

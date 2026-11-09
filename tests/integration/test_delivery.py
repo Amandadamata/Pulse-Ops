@@ -1,4 +1,4 @@
-"""Outbox e entregador (RF06): cenários 16 e 17."""
+"""Outbox and deliverer (RF06): scenarios 16 and 17."""
 
 import asyncio
 from datetime import timedelta
@@ -32,7 +32,7 @@ async def add_destination(sessions: SessionFactory, clock: FakeClock, url: str =
     async with sessions.begin() as session:
         session.add(
             AlertDestination(
-                name="equipe", url=url, enabled=True, created_at=clock.now(), updated_at=clock.now()
+                name="team", url=url, enabled=True, created_at=clock.now(), updated_at=clock.now()
             )
         )
 
@@ -88,7 +88,7 @@ async def test_without_destination_event_is_still_recorded(
 async def test_retries_with_capped_exponential_backoff(
     sessions: SessionFactory, clock: FakeClock, settings: Settings
 ) -> None:
-    """Cenário 17 (parte do PulseOps): falhas temporárias são repetidas com espera crescente."""
+    """Scenario 17 (PulseOps side): temporary failures are retried with a growing wait."""
     await add_destination(sessions, clock)
     notifier = RecordingNotifier()
     notifier.result = SendResult(False, False, 503, 3, "HTTP 503")
@@ -100,7 +100,7 @@ async def test_retries_with_capped_exponential_backoff(
     assert d.next_attempt_at - clock.now() == timedelta(seconds=5)
 
     clock.advance(4)
-    assert await worker.run_deliveries_once() == 0  # ainda não venceu
+    assert await worker.run_deliveries_once() == 0  # not due yet
     clock.advance(1)
     assert await worker.run_deliveries_once() == 1
     [d] = await deliveries(sessions)
@@ -143,7 +143,7 @@ async def test_attempts_are_limited_then_failed(
 ) -> None:
     await add_destination(sessions, clock)
     notifier = RecordingNotifier()
-    notifier.result = SendResult(False, False, None, 5000, "sem resposta em 5 s")
+    notifier.result = SendResult(False, False, None, 5000, "no response in 5 s")
     worker, _ = await open_incident(sessions, clock, settings, notifier)
     for _ in range(settings.webhook_max_attempts + 2):
         await worker.run_deliveries_once()
@@ -169,14 +169,14 @@ async def test_client_error_is_permanent_failure(
 async def test_expired_lease_is_retried_which_may_duplicate(
     sessions: SessionFactory, clock: FakeClock, settings: Settings
 ) -> None:
-    """Entrega "pelo menos uma vez": se o worker morre depois de enviar e antes de gravar,
-    a reserva expira e o mesmo evento é enviado de novo (RF06.8)."""
+    """ "At least once" delivery: if the worker dies after sending and before saving,
+    the reservation expires and the same event is sent again (RF06.8)."""
     await add_destination(sessions, clock)
     await open_incident(sessions, clock, settings, RecordingNotifier())
     [first] = await alerts.claim_due_deliveries(
         sessions, now=clock.now(), limit=10, lease_seconds=35
     )
-    # ... o processo morreu aqui, sem gravar o resultado.
+    # ... the process died here, without saving the result.
     assert (
         await alerts.claim_due_deliveries(sessions, now=clock.now(), limit=10, lease_seconds=35)
         == []
@@ -185,14 +185,14 @@ async def test_expired_lease_is_retried_which_may_duplicate(
     [second] = await alerts.claim_due_deliveries(
         sessions, now=clock.now(), limit=10, lease_seconds=35
     )
-    assert second.event_key == first.event_key  # mesma identidade: o receptor deduplica
+    assert second.event_key == first.event_key  # same identity: the receiver deduplicates
     assert second.attempt_number == 2
 
 
 async def test_outbox_event_is_atomic_with_incident(
     sessions: SessionFactory, clock: FakeClock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Se a criação do evento falha, o incidente e o resultado do check também não são gravados."""
+    """If creating the event fails, the incident and the check result are not saved either."""
     await add_destination(sessions, clock)
     monitor = await create_monitor(sessions, clock, failure_threshold=1)
     target = ScriptedTarget(clock)
@@ -204,7 +204,7 @@ async def test_outbox_event_is_atomic_with_incident(
 
     async def broken(*args: Any, **kwargs: Any) -> Any:
         await original(*args, **kwargs)
-        raise RuntimeError("falha simulada depois de criar o evento")
+        raise RuntimeError("simulated failure after creating the event")
 
     monkeypatch.setattr(incidents, "enqueue_incident_alert", broken)
     with pytest.raises(RuntimeError):
@@ -221,7 +221,7 @@ async def test_outbox_event_is_atomic_with_incident(
 async def test_slow_webhook_does_not_block_checks(
     sessions: SessionFactory, clock: FakeClock, settings: Settings
 ) -> None:
-    """Cenário 16: enquanto um envio está travado, as verificações continuam."""
+    """Scenario 16: while a send is stuck, checks keep going."""
     await add_destination(sessions, clock)
     release = asyncio.Event()
 
@@ -232,14 +232,14 @@ async def test_slow_webhook_does_not_block_checks(
 
     worker, target = await open_incident(sessions, clock, settings, StuckNotifier())
     sending = asyncio.create_task(worker.run_deliveries_once())
-    await asyncio.sleep(0)  # o envio começou e está preso
+    await asyncio.sleep(0)  # the send started and is stuck
 
     target.mode = "ok"
     for _ in range(3):
         await tick(worker, clock, 60)
     assert not sending.done()
     [incident] = await incidents_of(sessions, 1)
-    assert incident.status == "resolved"  # verificações seguiram e recuperaram o incidente
+    assert incident.status == "resolved"  # checks went on and recovered the incident
 
     release.set()
     assert await sending == 1
@@ -271,13 +271,13 @@ async def test_webhook_timeout_is_retryable(clock: FakeClock) -> None:
     client = httpx.AsyncClient(transport=httpx.MockTransport(slow))
     notifier = WebhookNotifier(client, clock, DestinationPolicy(), timeout_seconds=0.05)
     result = await notifier.send(HOOK, "incident:1:opened", {})
-    assert (result.ok, result.permanent, result.error) == (False, False, "sem resposta em 0.05 s")
+    assert (result.ok, result.permanent, result.error) == (False, False, "no response in 0.05 s")
 
 
 async def test_blocked_destination_fails_permanently(
     sessions: SessionFactory, clock: FakeClock, settings: Settings
 ) -> None:
-    """T8: um destino que aponta para a rede interna nunca é chamado."""
+    """T8: a destination that points to the internal network is never called."""
     await add_destination(sessions, clock, url="http://10.0.0.5/hook")
     called: list[httpx.Request] = []
     client = httpx.AsyncClient(
@@ -287,5 +287,5 @@ async def test_blocked_destination_fails_permanently(
     worker, _ = await open_incident(sessions, clock, settings, notifier)
     await worker.run_deliveries_once()
     [d] = await deliveries(sessions)
-    assert d.status == "failed" and d.last_error is not None and "bloqueado" in d.last_error
+    assert d.status == "failed" and d.last_error is not None and "blocked" in d.last_error
     assert called == []

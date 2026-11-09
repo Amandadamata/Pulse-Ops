@@ -1,16 +1,16 @@
-"""Ensaio de carga local, modesto e reproduzível (executado dentro da rede do Compose).
+"""Small, reproducible local load test (runs inside the Compose network).
 
-Cria N monitores apontando para o alvo estável do laboratório, deixa o worker rodar
-por um tempo fixo enquanto clientes consultam a API, e mede:
-- checks gravados versus esperados;
-- atraso de início (started_at - scheduled_at);
-- resultados diferentes de "healthy" e erros internos;
-- lacunas de cobertura registradas;
-- latência da API (painel JSON e lista de monitores) sob essa carga.
+Creates N monitors pointing at the lab's stable target, lets the worker run for a
+fixed time while clients query the API, and measures:
+- checks saved versus expected;
+- start delay (started_at - scheduled_at);
+- results other than "healthy" and internal errors;
+- coverage gaps recorded;
+- API latency (JSON dashboard and monitor list) under that load.
 
-Ao final, arquiva os monitores do ensaio. O resultado sai em Markdown na saída padrão.
-Nada aqui extrapola capacidade: os números valem só para a máquina e a configuração
-registradas no relatório.
+At the end, it archives the test monitors. The result is printed as Markdown on standard output.
+Nothing here extrapolates capacity: the numbers only hold for the machine and configuration
+recorded in the report.
 """
 
 import argparse
@@ -26,11 +26,11 @@ from typing import Any
 import httpx
 
 CSRF_FIELD = re.compile(r'name="csrf_token" value="([^"]+)"')
-PREFIX = "Carga "
+PREFIX = "Load "
 
 
 def percentile(values: list[float], p: float) -> float:
-    """Nearest-rank, o mesmo critério do p95 do produto."""
+    """Nearest-rank, the same method as the product's p95."""
     ordered = sorted(values)
     rank = max(1, -(-len(ordered) * p // 100))
     return ordered[int(rank) - 1]
@@ -40,7 +40,7 @@ async def login(client: httpx.AsyncClient, username: str, password: str) -> str:
     page = await client.get("/login")
     token = CSRF_FIELD.search(page.text)
     if not token:
-        raise RuntimeError("página de login sem token CSRF")
+        raise RuntimeError("login page without a CSRF token")
     response = await client.post(
         "/login", data={"username": username, "password": password, "csrf_token": token.group(1)}
     )
@@ -48,12 +48,12 @@ async def login(client: httpx.AsyncClient, username: str, password: str) -> str:
         raise RuntimeError(f"login recusado: HTTP {response.status_code}")
     token = CSRF_FIELD.search((await client.get("/")).text)
     if not token:
-        raise RuntimeError("painel sem token CSRF")
+        raise RuntimeError("dashboard without a CSRF token")
     return token.group(1)
 
 
 async def prepare(client: httpx.AsyncClient, count: int, interval: int, target: str) -> list[int]:
-    """Cria ou reaproveita os monitores do ensaio, todos reiniciados."""
+    """Creates or reuses the test monitors, all of them reset."""
     existing = {m["name"]: m for m in (await client.get("/api/v1/monitors")).json()}
     ids = []
     for n in range(count):
@@ -121,7 +121,7 @@ async def main_async(args: argparse.Namespace) -> int:
         client.headers["X-CSRF-Token"] = csrf
         ids = await prepare(client, args.monitors, args.interval, target)
 
-        # Aquecimento: a primeira rodada de todos os monitores sai de uma vez.
+        # Warm-up: the first round of every monitor starts at once.
         await asyncio.sleep(args.interval)
         since = datetime.now(UTC)
         stop = asyncio.Event()
@@ -133,7 +133,7 @@ async def main_async(args: argparse.Namespace) -> int:
         stop.set()
         await asyncio.gather(*samplers)
         until = datetime.now(UTC)
-        await asyncio.sleep(args.interval)  # deixa terminar os checks iniciados na janela
+        await asyncio.sleep(args.interval)  # let the checks started in the window finish
 
         checks = await collect(client, ids, since, until)
         summary = (await client.get("/api/v1/summary")).json()
@@ -165,29 +165,29 @@ async def main_async(args: argparse.Namespace) -> int:
     for c in completed:
         outcomes[c["outcome"]] = outcomes.get(c["outcome"], 0) + 1
 
-    print(f"- Monitores: {args.monitors}, intervalo de {args.interval} s, alvo `{target}/stable`")
-    print(f"- Janela medida: {window:.0f} s (após {args.interval} s de aquecimento)")
-    print(f"- Clientes consultando a API em paralelo: {args.api_clients}")
-    print(f"- Checks esperados na janela: {expected:.0f}; gravados: {len(completed)}")
-    print(f"- Resultados: {outcomes}")
+    print(f"- Monitors: {args.monitors}, interval of {args.interval} s, target `{target}/stable`")
+    print(f"- Measured window: {window:.0f} s (after {args.interval} s of warm-up)")
+    print(f"- Clients querying the API in parallel: {args.api_clients}")
+    print(f"- Checks expected in the window: {expected:.0f}; saved: {len(completed)}")
+    print(f"- Results: {outcomes}")
     if lateness:
         print(
-            "- Atraso de início (started_at - scheduled_at): "
-            f"mediana {statistics.median(lateness):.0f} ms, "
-            f"p95 {percentile(lateness, 95):.0f} ms, máximo {max(lateness):.0f} ms"
+            "- Start delay (started_at - scheduled_at): "
+            f"median {statistics.median(lateness):.0f} ms, "
+            f"p95 {percentile(lateness, 95):.0f} ms, max {max(lateness):.0f} ms"
         )
     if durations:
         print(
-            f"- Duração dos checks: mediana {statistics.median(durations):.0f} ms, "
+            f"- Check duration: median {statistics.median(durations):.0f} ms, "
             f"p95 {percentile(durations, 95):.0f} ms"
         )
-    print(f"- Lacunas de cobertura registradas (primeiros 50 monitores): {gaps}")
-    print(f"- Worker ativo ao final: {summary['worker_alive']}")
+    print(f"- Coverage gaps recorded (first 50 monitors): {gaps}")
+    print(f"- Worker active at the end: {summary['worker_alive']}")
     for path, values in sorted(timings.items()):
         print(
-            f"- API `{path}`: {len(values)} requisições, mediana "
+            f"- API `{path}`: {len(values)} requests, median "
             f"{statistics.median(values):.0f} ms, p95 {percentile(values, 95):.0f} ms, "
-            f"máximo {max(values):.0f} ms"
+            f"max {max(values):.0f} ms"
         )
     return 0
 

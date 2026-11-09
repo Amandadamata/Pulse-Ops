@@ -1,4 +1,4 @@
-"""Dependências compartilhadas pelas rotas: estado da aplicação, sessão de banco e login."""
+"""Dependencies shared by the routes: application state, database session and login."""
 
 import hmac
 from collections.abc import AsyncIterator
@@ -38,8 +38,8 @@ State = Annotated[AppState, Depends(get_state)]
 
 
 async def get_db(state: State) -> AsyncIterator[AsyncSession]:
-    """Uma sessão por requisição. As rotas que alteram dados chamam commit() explicitamente;
-    o que não foi confirmado é desfeito quando a sessão fecha."""
+    """One session per request. Routes that change data call commit() explicitly;
+    anything not committed is rolled back when the session closes."""
     async with state.sessions() as session:
         yield session
 
@@ -49,11 +49,11 @@ Db = Annotated[AsyncSession, Depends(get_db)]
 
 @dataclass(frozen=True)
 class AuthContext:
-    """Valores copiados da sessão no início da requisição.
+    """Values copied from the session at the start of the request.
 
-    Não guarda objetos do ORM: se a rota desfizer a transação (rollback), objetos
-    carregados expiram e lê-los de novo no template exigiria I/O fora de contexto
-    assíncrono (bug B7).
+    It does not keep ORM objects: if the route rolls back the transaction, loaded objects
+    expire, and reading them again in the template would need I/O outside an async
+    context (bug B7).
     """
 
     operator_id: int
@@ -84,13 +84,13 @@ def tokens_match(expected: str | None, received: str | None) -> bool:
 
 
 async def require_api_auth(request: Request, ctx: MaybeAuth) -> AuthContext:
-    """API JSON: 401 sem sessão; métodos que alteram dados exigem o header X-CSRF-Token."""
+    """JSON API: 401 without a session; methods that change data require the X-CSRF-Token header."""
     if ctx is None:
-        raise HTTPException(status_code=401, detail="autenticação necessária")
+        raise HTTPException(status_code=401, detail="authentication required")
     if request.method in UNSAFE_METHODS and not tokens_match(
         ctx.csrf_token, request.headers.get("X-CSRF-Token")
     ):
-        raise HTTPException(status_code=403, detail="token CSRF ausente ou inválido")
+        raise HTTPException(status_code=403, detail="missing or invalid CSRF token")
     return ctx
 
 
@@ -103,7 +103,7 @@ class LoginRequiredError(Exception):
 
 
 async def require_page_auth(request: Request, ctx: MaybeAuth) -> AuthContext:
-    """Páginas: sem sessão, redireciona para o login (tratado em app.py)."""
+    """Pages: without a session, redirect to login (handled in app.py)."""
     if ctx is None:
         raise LoginRequiredError(request.url.path)
     return ctx
@@ -114,4 +114,4 @@ PageAuth = Annotated[AuthContext, Depends(require_page_auth)]
 
 def verify_form_csrf(ctx: AuthContext, submitted: str | None) -> None:
     if not tokens_match(ctx.csrf_token, submitted):
-        raise HTTPException(status_code=403, detail="token CSRF ausente ou inválido")
+        raise HTTPException(status_code=403, detail="missing or invalid CSRF token")

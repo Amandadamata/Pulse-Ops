@@ -1,7 +1,7 @@
 [project]
 name = "pulseops"
 version = "0.1.0"
-description = "Monitoramento explicável de APIs HTTP: verificações, incidentes por limiar e alertas por webhook."
+description = "Explainable HTTP API monitoring: checks, threshold-based incidents and webhook alerts."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12,<3.13"
@@ -42,14 +42,14 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "ASYNC", "DTZ", "RUF"]
-ignore = ["RUF001", "RUF002", "RUF003"]  # acentos e aspas tipográficas em textos em português
+ignore = ["RUF001", "RUF002", "RUF003"]  # accents and typographic quotes in Portuguese text (study material)
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "S105", "S106"]
 "lab/**" = ["S104"]
 "scripts/**" = ["S101"]
 "migrations/versions/**" = ["E501"]
-# Gerador do material de estudo: chama git, pandoc e node com argumentos fixos.
+# Study material generator: calls git, pandoc and node with fixed arguments.
 "study/**" = ["S603", "S607"]
 
 [tool.mypy]
@@ -68,8 +68,8 @@ addopts = "-ra --strict-markers"
 [tool.coverage.run]
 source = ["pulseops"]
 branch = true
-# O SQLAlchemy assíncrono executa partes do código dentro de greenlets; sem isto,
-# linhas executadas aparecem como não cobertas.
+# Async SQLAlchemy runs parts of the code inside greenlets; without this,
+# executed lines show up as not covered.
 concurrency = ["greenlet", "thread"]
 
 [tool.coverage.report]

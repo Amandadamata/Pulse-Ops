@@ -1,4 +1,4 @@
-"""Interface nos fluxos principais (RF07) e cenário 23 (injeção na interface)."""
+"""Interface in the main flows (RF07) and scenario 23 (injection in the interface)."""
 
 import re
 
@@ -16,8 +16,8 @@ CSRF = re.compile(r'name="csrf_token" value="([^"]+)"')
 async def test_empty_state(api: httpx.AsyncClient) -> None:
     page = await api.get("/")
     assert page.status_code == 200
-    assert "Nenhum monitor cadastrado" in page.text
-    assert "Nenhum sinal do worker" in page.text
+    assert "No monitors yet" in page.text
+    assert "No signal from the worker" in page.text
 
 
 async def test_create_monitor_through_form_and_see_errors(api: httpx.AsyncClient) -> None:
@@ -26,7 +26,7 @@ async def test_create_monitor_through_form_and_see_errors(api: httpx.AsyncClient
     assert token
     data = {
         "csrf_token": token.group(1),
-        "name": "Busca",
+        "name": "Search",
         "url": "http://127.0.0.1:8080/",
         "method": "GET",
         "interval_seconds": "10",
@@ -37,19 +37,19 @@ async def test_create_monitor_through_form_and_see_errors(api: httpx.AsyncClient
         "accepted_status_codes": "200-299",
     }
     bad = await api.post("/monitors/new", data=data)
-    assert bad.status_code == 422 and "informe um número inteiro" in bad.text
+    assert bad.status_code == 422 and "enter a whole number" in bad.text
 
     data["latency_threshold_ms"] = "800"
     bad = await api.post("/monitors/new", data=data)
     assert bad.status_code == 422
-    assert "endereço de loopback" in bad.text and "deve estar entre 30 e 86400" in bad.text
+    assert "loopback address" in bad.text and "must be between 30 and 86400" in bad.text
     assert 'aria-invalid="true"' in bad.text
 
-    data.update(url="https://busca.example.com/health", interval_seconds="60")
+    data.update(url="https://search.example.com/health", interval_seconds="60")
     ok = await api.post("/monitors/new", data=data)
     assert ok.status_code == 303
     detail = await api.get(ok.headers["location"])
-    assert "Busca" in detail.text and "Sem dados: nenhum check concluído ainda" in detail.text
+    assert "Search" in detail.text and "No data: no check finished yet" in detail.text
 
 
 async def test_monitor_detail_with_real_data(
@@ -65,9 +65,9 @@ async def test_monitor_detail_with_real_data(
     await worker.heartbeat()
     page = await api.get(f"/monitors/{monitor.id}")
     text = page.text
-    assert "<svg" in text and "4 checks" in text  # gráfico gerado dos checks gravados
-    assert "Incidente confirmado após 2 falhas consecutivas" in text
-    assert "Indisponível" in text and "Status inesperado" in text and "Lento" in text
+    assert "<svg" in text and "4 checks" in text  # chart generated from the saved checks
+    assert "Incident confirmed after 2 consecutive failures" in text
+    assert "Down" in text and "Unexpected status" in text and "Slow" in text
     assert "p95 (n = 4)" in text
     filtered = await api.get(f"/monitors/{monitor.id}", params={"outcome": "slow"})
     assert filtered.text.count('class="badge badge-outcome-slow"') == 1
@@ -77,7 +77,7 @@ async def test_incident_pages_and_notifications(
     api: httpx.AsyncClient, sessions: SessionFactory, clock: FakeClock, settings: Settings
 ) -> None:
     await api.post(
-        "/api/v1/destinations", json={"name": "equipe", "url": "https://hooks.example.com/x"}
+        "/api/v1/destinations", json={"name": "team", "url": "https://hooks.example.com/x"}
     )
     await create_monitor(sessions, clock, failure_threshold=1)
     target = ScriptedTarget(clock)
@@ -86,18 +86,18 @@ async def test_incident_pages_and_notifications(
     await tick(worker, clock)
     listing = await api.get("/incidents")
     assert (
-        "Incidente confirmado após 1 falha consecutiva; último resultado: sem resposta em 5 s."
+        "Incident confirmed after 1 consecutive failure; last result: no response in 5 s."
         in listing.text
     )
     detail = await api.get("/incidents/1")
-    assert "Primeira falha" in detail.text and "incident:1:opened" in detail.text
+    assert "First failure" in detail.text and "incident:1:opened" in detail.text
     await worker.run_deliveries_once()
     notifications = await api.get("/notifications")
-    assert "Entregue" in notifications.text and "pelo menos uma vez" in notifications.text
+    assert "Delivered" in notifications.text and "at least once" in notifications.text
 
 
 async def test_monitor_name_is_escaped(api: httpx.AsyncClient) -> None:
-    """Cenário 23: HTML/JS no nome e na descrição aparece como texto."""
+    """Scenario 23: HTML/JS in the name and description shows up as text."""
     payload = '<script>alert("x")</script><img src=x onerror=alert(1)>'
     created = await api.post(
         "/api/v1/monitors",
@@ -116,7 +116,7 @@ async def test_monitor_name_is_escaped(api: httpx.AsyncClient) -> None:
 
 
 async def test_sql_injection_attempts_are_plain_data(api: httpx.AsyncClient) -> None:
-    """Cenário 23: texto com SQL é gravado e exibido como dado; filtros inválidos dão 422."""
+    """Scenario 23: text with SQL is saved and shown as data; invalid filters give 422."""
     name = "x'); DROP TABLE monitors; --"
     created = await api.post(
         "/api/v1/monitors", json={"name": name, "url": "https://x.example.com/"}
@@ -141,7 +141,7 @@ async def test_security_headers(api: httpx.AsyncClient) -> None:
 
 async def test_not_found_page_is_html(api: httpx.AsyncClient) -> None:
     response = await api.get("/monitors/999")
-    assert response.status_code == 404 and "Página não encontrada" in response.text
+    assert response.status_code == 404 and "Page not found" in response.text
 
 
 async def test_demo_banner_only_in_demo_mode(
@@ -153,19 +153,19 @@ async def test_demo_banner_only_in_demo_mode(
         app.router.lifespan_context(app),
         httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as client,
     ):
-        assert "Modo demonstração" in (await client.get("/login")).text
+        assert "Demo mode" in (await client.get("/login")).text
     normal = create_app(settings, sessions=sessions, clock=clock, resolver=FakeResolver())
     async with (
         normal.router.lifespan_context(normal),
         httpx.AsyncClient(transport=httpx.ASGITransport(app=normal), base_url="http://t") as client,
     ):
-        assert "Modo demonstração" not in (await client.get("/login")).text
+        assert "Demo mode" not in (await client.get("/login")).text
 
 
 async def test_times_are_shown_in_display_timezone(
     api: httpx.AsyncClient, sessions: SessionFactory, clock: FakeClock, settings: Settings
 ) -> None:
-    """Cenário 18 na interface: 12:00 UTC aparece como 09:00 em São Paulo."""
+    """Scenario 18 in the interface: 12:00 UTC shows as 09:00 in Sao Paulo."""
     monitor = await create_monitor(sessions, clock)
     await make_worker(sessions, clock, ScriptedTarget(clock), settings).run_checks_once()
     page = await api.get(f"/monitors/{monitor.id}")
@@ -193,30 +193,30 @@ def _form_of(monitor: dict[str, object], token: str, **changes: object) -> dict[
 
 
 async def test_edit_and_lifecycle_actions_through_forms(api: httpx.AsyncClient) -> None:
-    """RF01 pela interface: editar, pausar, retomar, verificar agora e arquivar."""
+    """RF01 through the interface: edit, pause, resume, check now and archive."""
     monitor = (
-        await api.post("/api/v1/monitors", json={"name": "Loja", "url": "https://x.example.com/"})
+        await api.post("/api/v1/monitors", json={"name": "Store", "url": "https://x.example.com/"})
     ).json()
     path = f"/monitors/{monitor['id']}"
     edit = await api.get(f"{path}/edit")
     token = CSRF.search(edit.text)
-    assert token and 'value="Loja"' in edit.text
+    assert token and 'value="Store"' in edit.text
     csrf = token.group(1)
 
     invalid = await api.post(f"{path}/edit", data=_form_of(monitor, csrf, failure_threshold=0))
-    assert invalid.status_code == 422 and "Loja" in invalid.text
-    saved = await api.post(f"{path}/edit", data=_form_of(monitor, csrf, name="Loja online"))
+    assert invalid.status_code == 422 and "Store" in invalid.text
+    saved = await api.post(f"{path}/edit", data=_form_of(monitor, csrf, name="Online store"))
     assert saved.status_code == 303 and saved.headers["location"] == path
-    assert "Loja online" in (await api.get(path)).text
+    assert "Online store" in (await api.get(path)).text
 
-    for action, label in [("pause", "Pausado"), ("resume", "Ativo"), ("check", "Ativo")]:
+    for action, label in [("pause", "Paused"), ("resume", "Active"), ("check", "Active")]:
         response = await api.post(f"{path}/{action}", data={"csrf_token": csrf})
         assert response.status_code == 303, action
         assert label in (await api.get(path)).text
     assert (await api.post(f"{path}/desconhecida", data={"csrf_token": csrf})).status_code == 404
     assert (await api.post(f"{path}/archive", data={"csrf_token": csrf})).status_code == 303
     assert (await api.post(f"{path}/pause", data={"csrf_token": csrf})).status_code == 409
-    archived_edit = await api.post(f"{path}/edit", data=_form_of(monitor, csrf, name="Outra"))
+    archived_edit = await api.post(f"{path}/edit", data=_form_of(monitor, csrf, name="Another"))
     assert archived_edit.status_code == 409
     assert (await api.get("/monitors/9999/edit")).status_code == 404
 
@@ -229,22 +229,25 @@ async def test_destination_form_validates_and_toggles(api: httpx.AsyncClient) ->
     form = "/notifications/destinations"
 
     blocked = await api.post(
-        form, data={"csrf_token": csrf, "name": "Interno", "url": "http://10.0.0.5/hook"}
+        form, data={"csrf_token": csrf, "name": "Internal", "url": "http://10.0.0.5/hook"}
     )
     assert blocked.status_code == 422 and "10.0.0.5" in blocked.text  # valor preenchido volta
     unnamed = await api.post(
         form, data={"csrf_token": csrf, "name": "", "url": "https://h.example.com/"}
     )
-    assert unnamed.status_code == 422 and "obrigatório" in unnamed.text
+    assert unnamed.status_code == 422 and "required" in unnamed.text
 
-    ok = {"csrf_token": csrf, "name": "Equipe", "url": "https://hooks.example.com/pulse"}
+    ok = {"csrf_token": csrf, "name": "Team", "url": "https://hooks.example.com/pulse"}
     assert (await api.post(form, data=ok)).status_code == 303
     duplicate = await api.post(form, data=ok)
-    assert duplicate.status_code == 422 and "já existe um destino" in duplicate.text
+    assert (
+        duplicate.status_code == 422
+        and "a destination with this name already exists" in duplicate.text
+    )
 
     [destination] = (await api.get("/api/v1/destinations")).json()
     toggle = f"{form}/{destination['id']}/toggle"
     assert (await api.post(toggle, data={"csrf_token": csrf})).status_code == 303
-    assert "Desativado" in (await api.get("/notifications")).text
+    assert "Disabled" in (await api.get("/notifications")).text
     assert (await api.post(f"{form}/9999/toggle", data={"csrf_token": csrf})).status_code == 404
-    assert (await api.post(toggle, data={"csrf_token": "errado"})).status_code == 403
+    assert (await api.post(toggle, data={"csrf_token": "wrong"})).status_code == 403

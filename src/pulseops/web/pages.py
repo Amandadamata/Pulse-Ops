@@ -1,4 +1,4 @@
-"""Páginas do dashboard (RF07) e login/logout (RF08)."""
+"""Dashboard pages (RF07) and login/logout (RF08)."""
 
 import secrets
 from datetime import timedelta
@@ -63,7 +63,7 @@ def redirect(path: str) -> RedirectResponse:
 
 
 def _safe_next(path: str | None) -> str:
-    """Só aceita caminhos internos no ?next=, para o login não virar um redirecionador aberto."""
+    """Only accepts internal paths in ?next=, so login does not become an open redirect."""
     if not path or not path.startswith("/") or path.startswith("//") or urlsplit(path).netloc:
         return "/"
     return path
@@ -99,7 +99,7 @@ async def login(
     next: Annotated[str, Form()] = "/",
 ) -> Response:
     if not tokens_match(request.cookies.get(LOGIN_CSRF_COOKIE), csrf_token):
-        raise HTTPException(403, "token CSRF ausente ou inválido")
+        raise HTTPException(403, "missing or invalid CSRF token")
     operator = await auth.authenticate(db, username, password)
     if operator is None:
         token = secrets.token_urlsafe(32)
@@ -109,7 +109,7 @@ async def login(
             "login.html",
             None,
             status_code=401,
-            error="Usuário ou senha inválidos.",
+            error="Invalid username or password.",
             login_csrf=token,
             next=_safe_next(next),
         )
@@ -148,7 +148,7 @@ async def logout(request: Request, db: Db, ctx: PageAuth, csrf_token: Csrf) -> R
     return response
 
 
-# ---- painel e monitores ---------------------------------------------------------
+# ---- dashboard and monitors ----------------------------------------------------
 
 
 @router.get("/")
@@ -186,7 +186,7 @@ def _form_config(form: dict[str, str]) -> tuple[MonitorConfig | None, list[Field
         try:
             numbers[field] = int(form.get(field, ""))
         except ValueError:
-            errors.append(FieldError(field, "informe um número inteiro"))
+            errors.append(FieldError(field, "enter a whole number"))
     if errors:
         return None, errors
     return (
@@ -360,7 +360,7 @@ async def monitor_action(
         "check": monitor_service.request_check_now,
     }
     if action not in operations:
-        raise HTTPException(404, "ação desconhecida")
+        raise HTTPException(404, "unknown action")
     try:
         await operations[action](db, monitor_id, now=state.clock.now())
     except NotFoundError as exc:
@@ -371,7 +371,7 @@ async def monitor_action(
     return redirect(f"/monitors/{monitor_id}")
 
 
-# ---- incidentes e notificações ------------------------------------------------------
+# ---- incidents and notifications --------------------------------------------------
 
 
 @router.get("/incidents")
@@ -400,7 +400,7 @@ async def incident_page(
 ) -> Response:
     detail = await queries.incident_detail(db, incident_id)
     if detail is None:
-        raise HTTPException(404, "incidente não encontrado")
+        raise HTTPException(404, "incident not found")
     return render(request, state, "incident_detail.html", ctx, detail=detail, now=state.clock.now())
 
 
@@ -429,7 +429,7 @@ async def create_destination(request: Request, db: Db, state: State, ctx: PageAu
     url = form.get("url", "").strip()[:2048]
     errors: dict[str, str] = {}
     if not name:
-        errors["name"] = "obrigatório"
+        errors["name"] = "required"
     try:
         await validate_destination(state.policy, url, state.resolver)
     except UnsafeDestinationError as exc:
@@ -442,7 +442,7 @@ async def create_destination(request: Request, db: Db, state: State, ctx: PageAu
             return redirect("/notifications")
         except IntegrityError:
             await db.rollback()
-            errors["name"] = "já existe um destino com este nome"
+            errors["name"] = "a destination with this name already exists"
     destinations = list(
         (await db.scalars(select(AlertDestination).order_by(AlertDestination.id))).all()
     )
@@ -466,7 +466,7 @@ async def toggle_destination(
     verify_form_csrf(ctx, csrf_token)
     destination = await db.get(AlertDestination, destination_id)
     if destination is None:
-        raise HTTPException(404, "destino não encontrado")
+        raise HTTPException(404, "destination not found")
     destination.enabled = not destination.enabled
     destination.updated_at = state.clock.now()
     await db.commit()

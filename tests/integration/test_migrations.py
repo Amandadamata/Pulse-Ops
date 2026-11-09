@@ -1,4 +1,4 @@
-"""A migração cria o banco do zero e corresponde aos modelos."""
+"""The migration creates the database from scratch and matches the models."""
 
 import psycopg
 import pytest
@@ -30,7 +30,7 @@ EXPECTED_TABLES = {
 
 @pytest.fixture
 def scratch_url() -> str:
-    """Banco separado, criado vazio, só para este teste."""
+    """Separate database, created empty, only for this test."""
     url = make_url(TEST_DATABASE_URL).set(database="pulseops_migration_test")
     admin = url.set(drivername="postgresql", database="postgres").render_as_string(
         hide_password=False
@@ -49,7 +49,7 @@ def test_upgrade_on_empty_database_creates_all_tables(scratch_url: str) -> None:
         assert tables >= EXPECTED_TABLES
         with engine.connect() as conn:
             diff = compare_metadata(MigrationContext.configure(conn), Base.metadata)
-        assert diff == [], f"modelos e migração divergem: {diff}"
+        assert diff == [], f"models and migration differ: {diff}"
     finally:
         engine.dispose()
 

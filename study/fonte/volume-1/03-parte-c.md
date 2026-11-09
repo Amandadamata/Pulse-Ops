@@ -83,9 +83,9 @@ tabela `deliveries`), a API só precisa gravar e o worker só precisa ler.
 | `lab/target.py` | Alvo controlável: saudável, lento, erro 500, timeout |
 | `lab/receiver.py` | Receptor de webhooks com deduplicação e modo indisponível |
 | `scripts/demo.sh`, `scripts/demo_flow.py` | Sobem o laboratório e executam os 11 passos |
-| `scripts/ensaio_carga.sh`, `scripts/ensaio_carga.py` | Ensaio de carga local |
-| `scripts/conferir_referencias.py` | Confere se testes citados na documentação existem |
-| `scripts/capturar_telas.mjs` | Gera as capturas de tela (opcional, usa Node) |
+| `scripts/load_test.sh`, `scripts/load_test.py` | Ensaio de carga local |
+| `scripts/check_doc_references.py` | Confere se testes citados na documentação existem |
+| `scripts/capture_screenshots.mjs` | Gera as capturas de tela (opcional, usa Node) |
 | `migrations/env.py`, `migrations/versions/0001_esquema_inicial.py` | Configuração do Alembic e a migração |
 | `tests/unit/` | Testes sem banco |
 | `tests/integration/` | Testes com PostgreSQL real |

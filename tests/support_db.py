@@ -1,4 +1,4 @@
-"""Atalhos para os testes de integração: criar monitores e rodar o worker."""
+"""Shortcuts for the integration tests: create monitors and run the worker."""
 
 from dataclasses import replace
 from datetime import datetime, timedelta
@@ -17,8 +17,8 @@ from pulseops.worker.runner import Worker
 from tests.support import FakeClock, FakeResolver, ScriptedTarget
 
 BASE = MonitorConfig(
-    name="API de pedidos",
-    url="https://pedidos.example.com/health",
+    name="Orders API",
+    url="https://orders.example.com/health",
     interval_seconds=60,
     timeout_seconds=5,
     latency_threshold_ms=1000,
@@ -62,12 +62,12 @@ def make_worker(
         notifier=notifier or RecordingNotifier(),
         clock=clock,
         settings=settings,
-        worker_id="worker-de-teste",
+        worker_id="test-worker",
     )
 
 
 async def tick(worker: Worker, clock: FakeClock, seconds: float = 60) -> int:
-    """Executa o que estiver vencido e avança o relógio um intervalo."""
+    """Runs whatever is due and moves the clock forward one interval."""
     count = await worker.run_checks_once()
     clock.advance(seconds)
     return count
@@ -120,7 +120,7 @@ async def insert_checks(
     start: datetime,
     step: float = 1,
 ) -> None:
-    """Grava checks concluídos em horários exatos (start, start+step, ...)."""
+    """Saves finished checks at exact times (start, start+step, ...)."""
     async with sessions.begin() as session:
         for i, (outcome, ms) in enumerate(rows):
             at = start + timedelta(seconds=i * step)

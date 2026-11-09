@@ -1,4 +1,4 @@
-"""Regra de transição de saúde e incidentes (RF03), sem banco."""
+"""Health and incident transition rule (RF03), without a database."""
 
 from datetime import timedelta
 
@@ -24,7 +24,7 @@ def run(
     tracker = HealthTracker(Thresholds(failure, recovery))
     decisions = []
     for i, outcome in enumerate(outcomes):
-        obs = Observation(outcome, START + timedelta(minutes=i), f"resultado {i}")
+        obs = Observation(outcome, START + timedelta(minutes=i), f"result {i}")
         decision = tracker.apply(state, obs)
         decisions.append(decision)
         state = decision.state
@@ -60,7 +60,7 @@ def test_mandatory_example_more_failures_update_the_same_incident() -> None:
 def test_mandatory_example_recovery_requires_configured_successes() -> None:
     state, decisions = run([F, F, F, S, S], recovery=2)
     assert actions(decisions)[3:] == [IncidentAction.NONE, IncidentAction.RESOLVE]
-    assert decisions[3].state.health is Health.DOWN  # um sucesso não basta
+    assert decisions[3].state.health is Health.DOWN  # one success is not enough
     assert state.incident_open is False and state.health is Health.HEALTHY
 
 
@@ -78,8 +78,8 @@ def test_failure_during_recovery_resets_success_counter() -> None:
 
 def test_first_failure_time_is_kept_until_confirmation() -> None:
     state, decisions = run([F, F, F])
-    assert state.first_failure_at == START  # primeira falha, não a da confirmação
-    assert decisions[2].reason.startswith("Incidente confirmado após 3 falhas consecutivas")
+    assert state.first_failure_at == START  # the first failure, not the confirming one
+    assert decisions[2].reason.startswith("Incident confirmed after 3 consecutive failures")
 
 
 def test_slow_is_degraded_but_not_a_failure() -> None:
@@ -92,7 +92,7 @@ def test_slow_is_degraded_but_not_a_failure() -> None:
 def test_slow_response_counts_towards_recovery() -> None:
     state, decisions = run([F, Outcome.SLOW, Outcome.SLOW], failure=1, recovery=2)
     assert actions(decisions)[-1] is IncidentAction.RESOLVE
-    assert state.health is Health.DEGRADED  # recuperou, mas continua lento
+    assert state.health is Health.DEGRADED  # recovered, but still slow
 
 
 def test_internal_error_changes_nothing() -> None:
@@ -120,7 +120,7 @@ def test_every_target_failure_category_counts(outcome: Outcome) -> None:
 def test_failure_below_threshold_is_degraded_with_progress_message() -> None:
     state, decisions = run([F])
     assert state.health is Health.DEGRADED
-    assert decisions[0].reason == "Falha 1 de 3 necessárias para abrir incidente: resultado 0."
+    assert decisions[0].reason == "Failure 1 of 3 needed to open an incident: result 0."
 
 
 def test_health_changed_flag() -> None:

@@ -1,4 +1,4 @@
-"""Cenário 22: bloqueios SSRF na validação da URL e dos endereços (T1, T2, T5, T6, T9)."""
+"""Scenario 22: SSRF blocks when validating the URL and the addresses (T1, T2, T5, T6, T9)."""
 
 import ipaddress
 
@@ -29,33 +29,36 @@ def test_allowed_urls(url: str) -> None:
         ("ftp://example.com/", "http"),
         ("file:///etc/passwd", "http"),
         ("gopher://example.com/", "http"),
-        ("https://user:pass@example.com/", "credenciais"),
-        ("https://user@example.com/", "credenciais"),
-        ("https://example.com:22/", "porta 22"),
-        ("https://example.com:5432/", "porta 5432"),
-        ("https://example.com:99999/", "URL inválida"),
-        ("https:///sem-host", "sem host"),
+        ("https://user:pass@example.com/", "credentials"),
+        ("https://user@example.com/", "credentials"),
+        ("https://example.com:22/", "port 22"),
+        ("https://example.com:5432/", "port 5432"),
+        ("https://example.com:99999/", "invalid URL"),
+        ("https:///no-host", "without a host"),
         ("http://127.0.0.1/", "loopback"),
-        ("http://localhost.:80/", None),  # nome: só é barrado na resolução (ver test_transport)
-        ("http://10.0.0.1/", "privado"),
-        ("http://172.16.5.4/", "privado"),
-        ("http://192.168.1.1/", "privado"),
+        (
+            "http://localhost.:80/",
+            None,
+        ),  # name: only blocked at resolution time (see test_transport)
+        ("http://10.0.0.1/", "private"),
+        ("http://172.16.5.4/", "private"),
+        ("http://192.168.1.1/", "private"),
         ("http://169.254.169.254/latest/meta-data/", "link-local"),
-        ("http://100.64.0.1/", "reservado"),
-        ("http://0.0.0.0/", "não especificado"),
+        ("http://100.64.0.1/", "reserved"),
+        ("http://0.0.0.0/", "unspecified"),
         ("http://224.0.0.1/", "multicast"),
         ("http://[::1]/", "loopback"),
         ("http://[fe80::1]/", "link-local"),
-        ("http://[fd00:ec2::254]/", "privado"),
+        ("http://[fd00:ec2::254]/", "private"),
         ("http://[::ffff:127.0.0.1]/", "loopback"),
-        ("http://[::ffff:10.0.0.1]/", "privado"),
-        ("http://[64:ff9b::a00:1]/", "privado"),  # NAT64 de 10.0.0.1
-        ("http://[2002:7f00:1::]/", "loopback"),  # 6to4 de 127.0.0.1
-        ("http://2130706433/", "não canônica"),  # 127.0.0.1 em decimal
-        ("http://0x7f000001/", "não canônica"),
-        ("http://0177.0.0.1/", "não canônica"),
-        ("http://0x7f.1/", "não canônica"),
-        ("http://127.1/", "não canônica"),
+        ("http://[::ffff:10.0.0.1]/", "private"),
+        ("http://[64:ff9b::a00:1]/", "private"),  # NAT64 of 10.0.0.1
+        ("http://[2002:7f00:1::]/", "loopback"),  # 6to4 of 127.0.0.1
+        ("http://2130706433/", "non-canonical"),  # 127.0.0.1 in decimal
+        ("http://0x7f000001/", "non-canonical"),
+        ("http://0177.0.0.1/", "non-canonical"),
+        ("http://0x7f.1/", "non-canonical"),
+        ("http://127.1/", "non-canonical"),
     ],
 )
 def test_blocked_urls(url: str, message: str | None) -> None:
@@ -76,11 +79,11 @@ def test_demo_allowlist_is_nominal_and_port_specific() -> None:
     demo.validate_url("http://lab-target:8081/service")
     demo.check_address("lab-target", 8081, ipaddress.ip_address("172.18.0.5"))
     with pytest.raises(UnsafeDestinationError):
-        demo.validate_url("http://lab-target:9999/")  # outra porta não está liberada
+        demo.validate_url("http://lab-target:9999/")  # another port is not allowed
     with pytest.raises(UnsafeDestinationError):
-        demo.check_address("outro-host", 8081, ipaddress.ip_address("172.18.0.5"))
+        demo.check_address("other-host", 8081, ipaddress.ip_address("172.18.0.5"))
     with pytest.raises(UnsafeDestinationError):
-        demo.validate_url("http://172.18.0.5:8081/")  # liberar o nome não libera o IP
+        demo.validate_url("http://172.18.0.5:8081/")  # allowing the name does not allow the IP
 
 
 def test_demo_allowlist_is_ignored_outside_demo_mode() -> None:
